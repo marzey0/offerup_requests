@@ -1,37 +1,87 @@
 import json
 import uuid
-from typing import Dict, Any, Optional
+from datetime import datetime
+from typing import Dict, Any, Optional, Tuple
+import random
+import string
 
 import aiohttp
+from aiohttp import ClientSession
+from aiohttp_socks import ProxyConnector
+
+
+def generate_random_user_agent() -> tuple[str, str]:
+    """
+    Генерирует случайный, но реалистичный User-Agent для Android-устройства.
+    Возвращает строку User-Agent и строку ou-browser-user-agent.
+    """
+    # Исторические версии Android и Chrome
+    android_versions = [
+        "10", "11", "12", "13", "14"
+    ]
+    chrome_versions = [
+        "110.0.5481.154", "111.0.5563.116", "112.0.5615.135", "113.0.5672.164",
+        "114.0.5735.196", "115.0.5790.166", "116.0.5845.164", "117.0.5938.140",
+        "118.0.5993.111", "119.0.6045.163", "120.0.6099.144", "121.0.6167.143",
+        "122.0.6261.148", "123.0.6312.121", "124.0.6367.179", "125.0.6422.140",
+        "126.0.6478.122", "127.0.6553.150", "128.0.6613.147", "129.0.6668.150",
+        "130.0.6723.103", "131.0.6778.139", "132.0.6834.139", "133.0.6893.109",
+        "134.0.6957.109", "135.0.7022.139", "136.0.7088.109", "137.0.7154.140",
+        "138.0.7220.140", "139.0.7286.140", "140.0.7339.51"
+    ]
+    # Популярные модели устройств
+    device_models = [
+        "SM-G973F", "SM-G988B", "SM-G998B", "SM-G991B", "SM-G996B", "SM-G990E",
+        "SM-N986B", "SM-N981B", "SM-F711B", "SM-F916B", "SM-A515F", "SM-A528B",
+        "SM-A715F", "SM-A325F", "SM-A127F", "SM-A037F", "SM-A025F", "SM-A013F",
+        "Pixel 3", "Pixel 3a", "Pixel 4", "Pixel 4a", "Pixel 5", "Pixel 5a",
+        "Pixel 6", "Pixel 6a", "Pixel 7", "Pixel 7 Pro", "Pixel 8", "Pixel 8 Pro",
+        "vivo 2019", "vivo 1916", "vivo 1907", "vivo 1818", "vivo 1807",
+        "motorola one fusion", "moto g power", "moto g stylus", "moto g pro",
+        "LG-K580", "LG-M700", "ASUS_X00TD", "ASUS_X01BDA", "HTC Desire 19+",
+        "OnePlus 8T", "OnePlus 9R", "OnePlus Nord", "OnePlus 11R", "POCO F3",
+        "Redmi Note 9", "Redmi Note 10", "Redmi 9T", "Redmi 10C", "Mi 11i",
+        "Mi A3", "Mi A2", "CPH1931", "RMX1911", "RMX2020", "RMX2185", "RMX3511",
+        "V1930A", "V1981A", "V2024", "V2156", "V2206", "V2217", "V2227", "V2241",
+        "Nokia 7.2", "Nokia 8.3 5G", "Nokia C30", "Nokia G20", "Nokia G40"
+    ]
+
+    android_version = random.choice(android_versions)
+    chrome_version = random.choice(chrome_versions)
+    device_model = random.choice(device_models)
+    build_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
+    # Собираем User-Agent
+    ua = f"Mozilla/5.0 (Linux; Android {android_version}; {device_model} Build/{build_id}; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/{chrome_version} Mobile Safari/537.36"
+
+    # Собираем ou-browser-user-agent (обычно тот же, что и UA для WebView)
+    browser_ua = ua
+
+    return ua, browser_ua
 
 
 class OfferUpAPI:
-    """
-    Асинхронный клиент для взаимодействия с API OfferUp.
-    Использует aiohttp для выполнения HTTP-запросов.
-    """
-
     BASE_URL = "https://client-graphql.offerup.com/"
-    # Пример "жестко закодированного" dummy токена, как видно в запросах
     DUMMY_TOKEN = "dummy"
 
-    def __init__(self, session: Optional[aiohttp.ClientSession] = None):
+    def __init__(self, proxy: str):
         """
         Инициализирует клиент OfferUpAPI.
-
-        Args:
-            session (Optional[aiohttp.ClientSession]): aiohttp сессия.
-                                                      Если не указана, будет создана новая.
+        Генерирует уникальные идентификаторы и User-Agent для этой сессии/аккаунта.
         """
-        self.proxy = "http://a04bd3b5a0c6e395e5cf__cr.us:cc4335faeefde850@gw.dataimpulse.com:823"
-        self.session = session or aiohttp.ClientSession()
+        self.proxy = proxy
+        self._session: Optional[ClientSession] = None
+
+        # Генерация уникальных данных для аккаунта/сессии
+        self._session_id = str(uuid.uuid4())
+        self._device_id = str(uuid.uuid4())
+        self._advertising_id = str(uuid.uuid4())
+        self._user_agent, self._browser_user_agent = generate_random_user_agent()
 
         # Атрибуты для хранения данных сессии и авторизации, полученных после логина/регистрации
         self._jwt_token: Optional[str] = None
         self._refresh_token: Optional[str] = None
-        self._session_id: Optional[str] = None
         self._user_id: Optional[str] = None
-        self._device_id: Optional[str] = None
         self._user_context: Dict[str, Any] = {}
 
     def update_auth_tokens(self, jwt_token: str, refresh_token: str):
@@ -41,13 +91,11 @@ class OfferUpAPI:
         self._jwt_token = jwt_token
         self._refresh_token = refresh_token
 
-    def update_session_data(self, session_id: str, user_id: str, device_id: str):
+    def update_session_data(self, user_id: str):
         """
-        Обновляет идентификаторы сессии, пользователя и устройства.
+        Обновляет идентификаторы пользователя.
         """
-        self._session_id = session_id
         self._user_id = user_id
-        self._device_id = device_id
 
     def update_user_context(self, context: Dict[str, Any]):
         """
@@ -61,16 +109,16 @@ class OfferUpAPI:
         """
         headers = {
             "accept": "*/*",
-            "user-agent": "OfferUp/2025.42.0 (build: 2025420004; vivo vivo 2019 SP1A.210812.003; Android 12; en_US)",
+            "user-agent": self._user_agent,
             "x-ou-version": "2025.42.0",
             "x-ou-device-timezone": "America/New_York",
-            "x-ou-d-token": self._device_id or "719062d0720c1500",  # Используем сохраненный или дефолтный
+            "x-ou-d-token": self._device_id,
             "Content-Type": "application/json",
             "Host": "client-graphql.offerup.com",
             # Примеры других постоянных заголовков из запросов
             "ou-do-not-sell": "false",
-            "ou-device-advertising-id": "427a5b09-585f-4da9-a7d2-4a20ffdcf3c3",
-            "ou-browser-user-agent": "Mozilla/5.0 (Linux; Android 12; vivo 2019 Build/SP1A.210812.003; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/140.0.7339.51 Mobile Safari/537.36",
+            "ou-device-advertising-id": self._advertising_id,
+            "ou-browser-user-agent": self._browser_user_agent,
         }
         return headers
 
@@ -88,15 +136,34 @@ class OfferUpAPI:
         """
         Помогает сформировать x-ou-session-id как в примерах.
         """
-        unique_id = str(uuid.uuid4())
-        timestamp = str(int(self.session.timeout.total * 1000)) # Упрощенный timestamp, обычно текущее время
-        return f"{self._session_id}@{timestamp}" if self._session_id else f"14b2640b-86d9-4b81-8efb-31b781c5e468@{timestamp}"
+        # Используем сохраненный или генерируем новый UUID
+        session_uuid = self._session_id
+        timestamp = str(int(datetime.now().timestamp() * 1000))  # Текущее время в миллисекундах
+        return f"{session_uuid}@{timestamp}"
+
+    async def __aenter__(self):
+        """
+        Асинхронный вход в контекстный менеджер.
+        Возвращает сам экземпляр класса.
+        """
+        # Инициализация сессии с прокси
+        connector = ProxyConnector.from_url(self.proxy)
+        self._session = aiohttp.ClientSession(connector=connector)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """
+        Асинхронный выход из контекстного менеджера.
+        Закрывает aiohttp сессию.
+        """
+        await self.close()
 
     async def _make_request(self, operation_name: str, query: str, variables: Dict[str, Any] = None,
-                            requires_auth: bool = False, screen: str = "", additional_headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+                            requires_auth: bool = False, screen: str = "",
+                            additional_headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         """
         Внутренний метод для выполнения GraphQL-запросов.
-
+        Автоматически генерирует x-request-id и обновляет x-ou-usercontext, если он изменился.
         Args:
             operation_name (str): Имя операции GraphQL.
             query (str): GraphQL-запрос.
@@ -104,7 +171,6 @@ class OfferUpAPI:
             requires_auth (bool): Требуется ли аутентификация для запроса.
             screen (str): Значение для заголовка x-ou-screen.
             additional_headers (Optional[Dict[str, str]]): Дополнительные заголовки для конкретного вызова.
-
         Returns:
             Dict[str, Any]: JSON-ответ от API.
         """
@@ -132,16 +198,9 @@ class OfferUpAPI:
             payload["variables"] = variables
 
         try:
-            async with self.session.post(url, headers=headers, json=payload, proxy=self.proxy) as response:
+            async with self._session.post(url, headers=headers, json=payload) as response:
                 response.raise_for_status()  # Вызовет исключение для 4xx/5xx
                 return await response.json()
-        except aiohttp.ClientResponseError as e:
-            print(f"HTTP Error {e.status}: {e.message}")
-            print(f"Response Body: {await e.response.text()}")
-            raise
-        except aiohttp.ClientError as e:
-            print(f"Client Error: {e}")
-            raise
         except Exception as e:
             print(f"Unexpected error during request: {e}")
             raise
@@ -151,6 +210,7 @@ class OfferUpAPI:
     async def get_user_context(self, viewport_size: Dict[str, int], search_location: Dict[str, float]) -> Dict[str, Any]:
         """
         Получает контекст пользователя.
+        Этот вызов обновляет self._user_context.
         """
         query = """
         query GetUserContext($input: UserContextInput) {
@@ -176,7 +236,12 @@ class OfferUpAPI:
             }
         }
         # Этот вызов не требует аутентификации
-        return await self._make_request("GetUserContext", query, variables, requires_auth=False, screen="OnboardingBuyerInterestSelection")
+        response = await self._make_request("GetUserContext", query, variables, requires_auth=False,
+                                            screen="OnboardingBuyerInterestSelection")
+        # Обновляем внутренний user_context из ответа
+        if response and 'data' in response and 'userContext' in response['data']:
+            self.update_user_context(response['data']['userContext'].get('userContext', {}))
+        return response
 
     async def signup(self, email: str, name: str, password: str, client_type: str = "Android") -> Dict[str, Any]:
         """
@@ -250,48 +315,19 @@ class OfferUpAPI:
             "clientType": client_type
         }
         # Этот вызов не требует аутентификации
-        return await self._make_request("Signup", query, variables, requires_auth=False, screen="/auth-stack/signup")
+        response = await self._make_request("Signup", query, variables, requires_auth=False,
+                                            screen="/auth-stack/signup")
+        # Извлечение токенов и ID из ответа signup
+        if response and 'data' in response and 'signup' in response['data']:
+            signup_data = response['data']['signup']
+            user_id = signup_data['id']
+            jwt_token = signup_data['sessionToken']['value']
+            refresh_token = signup_data['refreshToken']['value']
 
-    async def change_phone_number(self, phone_number: str, country_code: int = 1) -> Dict[str, Any]:
-        """
-        Изменяет номер телефона пользователя.
-        """
-        query = """
-        mutation ChangePhoneNumber($countryCode: Int!, $phoneNumber: String!) {
-          changePhoneNumber( {countryCode: $countryCode, phoneNumber: $phoneNumber}) {
-            referenceId
-            __typename
-          }
-        }
-        """
-        variables = {
-            "phoneNumber": phone_number,
-            "countryCode": country_code
-        }
-        return await self._make_request("ChangePhoneNumber", query, variables, requires_auth=True, screen="VerifyPhone")
-
-    async def change_phone_number_confirm(self, otp: str, reference_id: str, phone_number: str, country_code: int = 1, challenge_id: str = None) -> Dict[str, Any]:
-        """
-        Подтверждает изменение номера телефона с помощью OTP-кода.
-        """
-        query = """
-        mutation ChangePhoneNumberConfirm($otp: String!, $referenceId: String!, $countryCode: Int!, $phoneNumber: String!, $challengeId: ID) {
-          changePhoneNumberConfirm(
-             {otp: $otp, referenceId: $referenceId, countryCode: $countryCode, phoneNumber: $phoneNumber, challengeId: $challengeId}
-          )
-        }
-        """
-        variables = {
-            "otp": otp,
-            "referenceId": reference_id,
-            "countryCode": country_code,
-            "phoneNumber": phone_number
-            # challengeId опционально
-        }
-        if challenge_id:
-            variables["challengeId"] = challenge_id
-
-        return await self._make_request("ChangePhoneNumberConfirm", query, variables, requires_auth=True, screen="EnterCode")
+            # Обновление клиента токенами и ID
+            self.update_auth_tokens(jwt_token, refresh_token)
+            self.update_session_data(str(user_id))
+        return response
 
     async def get_auth_user(self) -> Dict[str, Any]:
         """
@@ -400,7 +436,8 @@ class OfferUpAPI:
           }
         }
         """
-        return await self._make_request("GetUnreadAlertCount", query, requires_auth=True, screen="/accountstack/account")
+        return await self._make_request("GetUnreadAlertCount", query, requires_auth=True,
+                                        screen="/accountstack/account")
 
     async def change_email(self, user_id: int, email: str) -> Dict[str, Any]:
         """
@@ -418,9 +455,11 @@ class OfferUpAPI:
             "email": email
             # multifactorHeaderInfo опущен, так как не был в примере
         }
-        return await self._make_request("ChangeEmail", query, variables, requires_auth=True, screen="/verify-email-stack/verify-email")
+        return await self._make_request("ChangeEmail", query, variables, requires_auth=True,
+                                        screen="/verify-email-stack/verify-email")
 
-    async def get_item_detail_data_by_listing_id(self, listing_id: str, is_logged_in: bool = True, device_location: Dict[str, float] = None) -> Dict[str, Any]:
+    async def get_item_detail_data_by_listing_id(self, listing_id: str, is_logged_in: bool = True,
+                                                 device_location: Dict[str, float] = None) -> Dict[str, Any]:
         """
         Получает детали товара по его идентификатору.
         """
@@ -620,14 +659,16 @@ class OfferUpAPI:
             "deviceLocation": device_location
         }
         # screen зависит от контекста вызова, используем общий
-        return await self._make_request("GetItemDetailDataByListingId", query, variables, requires_auth=is_logged_in, screen="ItemDetail")
+        return await self._make_request("GetItemDetailDataByListingId", query, variables, requires_auth=is_logged_in,
+                                        screen="ItemDetail")
 
     async def item_viewed(self, item_id: str, listing_id: str, seller_id: str, origin: str, source: str,
                           tile_type: str, user_id: str, category_id: str, tile_location: int,
                           shipping: Dict[str, Any], posting: Dict[str, Any], vehicle: Dict[str, Any],
-                          seller_type: str, header: Dict[str, Any] = None, mobile_header: Dict[str, Any] = None) -> Dict[str, Any]:
+                          seller_type: str) -> Dict[str, Any]:
         """
         Отправляет событие просмотра товара.
+        Автоматически генерирует header и mobileHeader.
         """
         query = """
         mutation ItemViewed($itemId: ID!, $listingId: ID!, $sellerId: ID!, $header: ItemViewedEventHeader!, $mobileHeader: ItemViewedEventMobileHeader!, $origin: String, $source: String, $tileType: String, $userId: String, $moduleId: ID, $shipping: ShippingInput, $vehicle: VehicleInput, $posting: PostingInput, $tileLocation: Int, $categoryId: String, $moduleType: String, $sellerType: SellerType) {
@@ -636,6 +677,11 @@ class OfferUpAPI:
           )
         }
         """
+
+        # Генерация timestamp и uniqueId для header
+        current_time_iso = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+        local_time_iso = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+
         variables = {
             "itemId": item_id,
             "listingId": listing_id,
@@ -650,17 +696,17 @@ class OfferUpAPI:
             "posting": posting,
             "vehicle": vehicle,
             "sellerType": seller_type,
-            "header": header or {
+            "header": {
                 "appVersion": "2025.42.0",
-                "deviceId": self._device_id or "719062d0720c1500",
+                "deviceId": self._device_id,
                 "origin": "android",
-                "timestamp": "2025-11-07T08:46:05.326Z", # Требуется обновление
-                "uniqueId": str(uuid.uuid4()), # Требуется генерация
+                "timestamp": current_time_iso,
+                "uniqueId": str(uuid.uuid4()),
                 "userId": user_id,
                 "deviceLocation": posting.get("itemLocation", {})
             },
-            "mobileHeader": mobile_header or {
-                "localTimestamp": "2025-11-07T03:46:05.326Z" # Требуется обновление
+            "mobileHeader": {
+                "localTimestamp": local_time_iso
             }
         }
         return await self._make_request("ItemViewed", query, variables, requires_auth=True, screen="ItemDetail")
@@ -1385,9 +1431,52 @@ class OfferUpAPI:
         }
         return await self._make_request("UpdateReadDate", query, variables, requires_auth=True, screen="Discussion")
 
+    async def change_phone_number(self, phone_number: str, country_code: int = 1) -> Dict[str, Any]:
+        """
+        Изменяет номер телефона пользователя.
+        """
+        query = """
+        mutation ChangePhoneNumber($countryCode: Int!, $phoneNumber: String!) {
+          changePhoneNumber(data: {countryCode: $countryCode, phoneNumber: $phoneNumber}) {
+            referenceId
+            __typename
+          }
+        }
+        """
+        variables = {
+            "phoneNumber": phone_number,
+            "countryCode": country_code
+        }
+        return await self._make_request("ChangePhoneNumber", query, variables, requires_auth=True, screen="VerifyPhone")
+
+    async def change_phone_number_confirm(self, otp: str, reference_id: str, phone_number: str, country_code: int = 1,
+                                          challenge_id: str = None) -> Dict[str, Any]:
+        """
+        Подтверждает изменение номера телефона с помощью OTP-кода.
+        """
+        query = """
+        mutation ChangePhoneNumberConfirm($otp: String!, $referenceId: String!, $countryCode: Int!, $phoneNumber: String!, $challengeId: ID) {
+          changePhoneNumberConfirm(
+            data: {otp: $otp, referenceId: $referenceId, countryCode: $countryCode, phoneNumber: $phoneNumber, challengeId: $challengeId}
+          )
+        }
+        """
+        variables = {
+            "otp": otp,
+            "referenceId": reference_id,
+            "countryCode": country_code,
+            "phoneNumber": phone_number
+            # challengeId опционально
+        }
+        if challenge_id:
+            variables["challengeId"] = challenge_id
+
+        return await self._make_request("ChangePhoneNumberConfirm", query, variables, requires_auth=True,
+                                        screen="EnterCode")
+
     async def close(self):
         """
         Закрывает aiohttp сессию.
         """
-        if self.session and not self.session.closed:
-            await self.session.close()
+        if self._session and not self._session.closed:
+            await self._session.close()
