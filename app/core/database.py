@@ -94,7 +94,6 @@ async def mark_ad_as_processed(db_path: str, ad_id: str) -> bool:
             logger.warning(f"Объявление {ad_id} не найдено в БД для обновления статуса.")
             return False
         await db.commit()
-        logger.info(f"Объявление {ad_id} помечено как обработанное.")
         return True
 
 

@@ -2,12 +2,11 @@
 import asyncio
 import logging
 import time
-import random
 from typing import Dict, Any, Optional
 from app.core.offerup_api import OfferUpAPI
 from app.core.database import get_unprocessed_ads, mark_ad_as_processed
 from app.account_manager import AccountManager
-from config import SENDER_DELAY, SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT, SENDER_DELAY_BETWEEN_MESSAGES
+from config import SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT, SENDER_DELAY_BETWEEN_MESSAGES
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +19,9 @@ class MessageSender:
     Самое свежее объявление из базы данных передаётся на обработку.
     """
 
-    def __init__(self, db_path: str, delay: int = SENDER_DELAY):
+    def __init__(self, db_path: str):
         self.db_path = db_path
-        self.delay = delay
+        self.delay = 1
         self.running = True  # Флаг для остановки из main.py
         self.account_manager = AccountManager()
         # Словарь для отслеживания времени последнего использования аккаунта
@@ -72,12 +71,13 @@ class MessageSender:
                     # Помечаем объявление как обработанное
                     marked = await mark_ad_as_processed(self.db_path, ad_id)
                     if marked:
-                        logger.info(f"Объявление {ad_id} помечено как обработанное (processed=2).")
+                        logger.debug(f"Объявление {ad_id} помечено как обработанное (processed=2).")
                     else:
                         logger.error(f"Не удалось пометить объявление {ad_id} как обработанное.")
                 else:
                     logger.warning(f"Не удалось отправить сообщение по объявлению {ad_id} через аккаунт {account_key}.")
 
+                logger.info(f"Объявление {ad["id"]} отписано.")
                 # Обновляем время последнего использования аккаунта
                 self.account_last_used[account_key] = time.time()
 
