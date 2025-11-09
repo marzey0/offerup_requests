@@ -1,13 +1,19 @@
+# app/core/offerup_api.py
 import json
+import logging
 import uuid
-from datetime import datetime
-from typing import Dict, Any, Optional, Tuple
+import datetime
+from typing import Dict, Any, Optional
 import random
 import string
 
 import aiohttp
 from aiohttp import ClientSession
 from aiohttp_socks import ProxyConnector
+
+from config import MAIN_PROXY, OFFERUP_APP_VERSION, OFFERUP_BUILD
+
+logger = logging.getLogger(__name__)
 
 
 def generate_random_user_agent() -> tuple[str, str]:
@@ -33,17 +39,7 @@ def generate_random_user_agent() -> tuple[str, str]:
     device_models = [
         "SM-G973F", "SM-G988B", "SM-G998B", "SM-G991B", "SM-G996B", "SM-G990E",
         "SM-N986B", "SM-N981B", "SM-F711B", "SM-F916B", "SM-A515F", "SM-A528B",
-        "SM-A715F", "SM-A325F", "SM-A127F", "SM-A037F", "SM-A025F", "SM-A013F",
-        "Pixel 3", "Pixel 3a", "Pixel 4", "Pixel 4a", "Pixel 5", "Pixel 5a",
-        "Pixel 6", "Pixel 6a", "Pixel 7", "Pixel 7 Pro", "Pixel 8", "Pixel 8 Pro",
-        "vivo 2019", "vivo 1916", "vivo 1907", "vivo 1818", "vivo 1807",
-        "motorola one fusion", "moto g power", "moto g stylus", "moto g pro",
-        "LG-K580", "LG-M700", "ASUS_X00TD", "ASUS_X01BDA", "HTC Desire 19+",
-        "OnePlus 8T", "OnePlus 9R", "OnePlus Nord", "OnePlus 11R", "POCO F3",
-        "Redmi Note 9", "Redmi Note 10", "Redmi 9T", "Redmi 10C", "Mi 11i",
-        "Mi A3", "Mi A2", "CPH1931", "RMX1911", "RMX2020", "RMX2185", "RMX3511",
-        "V1930A", "V1981A", "V2024", "V2156", "V2206", "V2217", "V2227", "V2241",
-        "Nokia 7.2", "Nokia 8.3 5G", "Nokia C30", "Nokia G20", "Nokia G40"
+        "SM-A715F", "SM-A325F", "SM-A127F", "SM-A037F", "SM-A025F", "SM-A013F"
     ]
 
     android_version = random.choice(android_versions)
@@ -52,10 +48,8 @@ def generate_random_user_agent() -> tuple[str, str]:
     build_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
     # Собираем User-Agent
-    ua = f"Mozilla/5.0 (Linux; Android {android_version}; {device_model} Build/{build_id}; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/{chrome_version} Mobile Safari/537.36"
-
-    # Собираем ou-browser-user-agent (обычно тот же, что и UA для WebView)
-    browser_ua = ua
+    ua = f"OfferUp/{OFFERUP_APP_VERSION} (build: {OFFERUP_BUILD}; samsung {device_model} {build_id}; Android {android_version}; en_US)"
+    browser_ua = f"Mozilla/5.0 (Linux; Android {android_version}; {device_model} Build/{build_id}; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/{chrome_version} Mobile Safari/537.36"
 
     return ua, browser_ua
 
@@ -64,7 +58,7 @@ class OfferUpAPI:
     BASE_URL = "https://client-graphql.offerup.com/"
     DUMMY_TOKEN = "dummy"
 
-    def __init__(self, proxy: str):
+    def __init__(self, proxy: str = MAIN_PROXY):
         """
         Инициализирует клиент OfferUpAPI.
         Генерирует уникальные идентификаторы и User-Agent для этой сессии/аккаунта.
@@ -73,16 +67,18 @@ class OfferUpAPI:
         self._session: Optional[ClientSession] = None
 
         # Генерация уникальных данных для аккаунта/сессии
-        self._session_id = str(uuid.uuid4())
-        self._device_id = str(uuid.uuid4())
+        self._session_id = f"{str(uuid.uuid4())}@{random.randint(1111111111111, 9999999999999)}"
+        self._device_id = str(uuid.uuid4()).replace("-", "")[:-16]
         self._advertising_id = str(uuid.uuid4())
         self._user_agent, self._browser_user_agent = generate_random_user_agent()
 
         # Атрибуты для хранения данных сессии и авторизации, полученных после логина/регистрации
+        self.cookies = {}
         self._jwt_token: Optional[str] = None
         self._refresh_token: Optional[str] = None
         self._user_id: Optional[str] = None
         self._user_context: Dict[str, Any] = {}
+        self._anymessage_email_id: Optional[str] = None
 
     def update_auth_tokens(self, jwt_token: str, refresh_token: str):
         """
@@ -110,7 +106,7 @@ class OfferUpAPI:
         headers = {
             "accept": "*/*",
             "user-agent": self._user_agent,
-            "x-ou-version": "2025.42.0",
+            "x-ou-version": OFFERUP_APP_VERSION,
             "x-ou-device-timezone": "America/New_York",
             "x-ou-d-token": self._device_id,
             "Content-Type": "application/json",
@@ -138,7 +134,7 @@ class OfferUpAPI:
         """
         # Используем сохраненный или генерируем новый UUID
         session_uuid = self._session_id
-        timestamp = str(int(datetime.now().timestamp() * 1000))  # Текущее время в миллисекундах
+        timestamp = str(int(datetime.datetime.now().timestamp() * 1000))  # Текущее время в миллисекундах
         return f"{session_uuid}@{timestamp}"
 
     async def __aenter__(self):
@@ -162,8 +158,10 @@ class OfferUpAPI:
                             requires_auth: bool = False, screen: str = "",
                             additional_headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         """
-        Внутренний метод для выполнения GraphQL-запросов.
+        Внутренный метод для выполнения GraphQL-запросов.
         Автоматически генерирует x-request-id и обновляет x-ou-usercontext, если он изменился.
+        Правильно сохраняет и использует куки между запросами.
+
         Args:
             operation_name (str): Имя операции GraphQL.
             query (str): GraphQL-запрос.
@@ -171,6 +169,7 @@ class OfferUpAPI:
             requires_auth (bool): Требуется ли аутентификация для запроса.
             screen (str): Значение для заголовка x-ou-screen.
             additional_headers (Optional[Dict[str, str]]): Дополнительные заголовки для конкретного вызова.
+
         Returns:
             Dict[str, Any]: JSON-ответ от API.
         """
@@ -182,28 +181,99 @@ class OfferUpAPI:
             "x-ou-session-id": self._build_session_id(),
             "x-ou-usercontext": json.dumps(self._user_context) if self._user_context else "{}",
             "x-ou-screen": screen,
-            # Примеры заголовков, которые могут меняться
             "x-request-id": str(uuid.uuid4()),
-            # Sentry заголовки опущены для краткости, но можно добавить
         })
+        if self.cookies:
+            headers.update({
+                "Cookie": "; ".join([
+                    f"{key}={value}" for key, value in self.cookies.items()
+                ])
+            })
 
         # Упрощенный URL, так как все запросы идут на один эндпоинт
         url = self.BASE_URL
 
         payload = {
             "operationName": operation_name,
-            "query": query,
+            "query": query.replace("  ", ""),  # Уберём лишние отступы
         }
         if variables is not None:
             payload["variables"] = variables
 
+        logger.debug(f"Отправляю запрос по {url}\nЗаголовки: {headers}\nТело: {payload}")
+
         try:
+            # Создаем объект куки для сессии
             async with self._session.post(url, headers=headers, json=payload) as response:
                 response.raise_for_status()  # Вызовет исключение для 4xx/5xx
-                return await response.json()
+
+                # Обрабатываем куки из ответа
+                await self._update_cookies_from_response(response)
+
+                response_json = await response.json()
+
+                logger.debug(f"Ответ на запрос OfferUpAPI: {response_json}\nЗаголовки ответа: {response.headers}")
+                return response_json
         except Exception as e:
             print(f"Unexpected error during request: {e}")
             raise
+
+    async def _update_cookies_from_response(self, response: aiohttp.ClientResponse):
+        """
+        Обновляет куки из заголовков ответа.
+
+        Args:
+            response: Объект ответа aiohttp
+        """
+        if response.headers.get("Set-Cookie"):
+            # Получаем все куки из заголовков Set-Cookie
+            set_cookie_headers = response.headers.getall("Set-Cookie", [])
+
+            if not self.cookies:
+                self.cookies = {}
+
+            # Парсим каждый заголовок Set-Cookie и обновляем словарь куки
+            for cookie_header in set_cookie_headers:
+                parsed_cookies = self._parse_cookie_string(cookie_header)
+                self.cookies.update(parsed_cookies)
+
+            logger.debug(f"Обновлены куки: {self.cookies}")
+
+    def _parse_cookie_string(self, cookie_string: str) -> Dict[str, str]:
+        """
+        Парсит строку куки из заголовка Set-Cookie в словарь.
+
+        Args:
+            cookie_string: Строка куки из заголовка Set-Cookie
+
+        Returns:
+            Dict[str, str]: Словарь с парами имя=значение куки
+        """
+        cookies = {}
+
+        if not cookie_string:
+            return cookies
+
+        try:
+            # Разделяем по точкам с запятой и берем первую часть (основная пара имя=значение)
+            cookie_parts = cookie_string.split(';')
+            main_cookie = cookie_parts[0].strip()
+
+            if '=' in main_cookie:
+                name, value = main_cookie.split('=', 1)
+                cookies[name.strip()] = value.strip()
+
+            # Также обрабатываем дополнительные куки, если они есть
+            for part in cookie_parts[1:]:
+                part = part.strip()
+                if '=' in part:
+                    name, value = part.split('=', 1)
+                    cookies[name.strip()] = value.strip()
+
+        except Exception as e:
+            logger.warning(f"Ошибка при парсинге куки '{cookie_string}': {e}")
+
+        return cookies
 
     # --- API Методы ---
 
@@ -458,6 +528,40 @@ class OfferUpAPI:
         return await self._make_request("ChangeEmail", query, variables, requires_auth=True,
                                         screen="/verify-email-stack/verify-email")
 
+    async def confirm_email_from_token(self, user_id: str, token: str) -> Dict[str, Any]:
+        """
+        Подтверждает email, используя userId и token из письма.
+        Выполняет GraphQL-запрос ConfirmEmail.
+        Требует аутентификации (JWT токен).
+        """
+        query = """
+        mutation ConfirmEmail($userId: ID!, $token: String!, $challengeId: ID) {
+          confirmEmail(data: {userId: $userId, token: $token, challengeId: $challengeId})
+        }
+        """
+        variables = {
+            "userId": user_id,
+            "token": token,
+            "challengeId": None  # challenge_id из URL в примере был пустым, передаём null
+        }
+        # screen для подтверждения email, скорее всего, тот же, что и для VerifyEmail
+        # или может быть "/accounts/register/confirm-email" - проверить в реальном трафике
+        # Пока используем screen, связанный с VerifyEmail из предыдущих примеров
+        # screen="/verify-email-stack/verify-email" или "/verify-email"
+        # Проверим из curl: Referer содержит confirm-email, x-ou-operation-name: ConfirmEmail
+        # screen может быть "/accounts/register/confirm-email" или "/verify-email-stack/verify-email"
+        # Попробуем более общий "/verify-email-stack/verify-email", но можно уточнить
+        # Из curl: Referer: .../confirm-email?... -> screen="/accounts/register/confirm-email" ?
+        # screen="/accounts/register/confirm-email" # <- Попробуем этот screen, он логичен
+        # Однако, screen может быть и другим. В curl он не указан напрямую, но есть в Referer и operationName.
+        # Попробуем screen="/verify-email-stack/verify-email", так как он ассоциирован с VerifyEmail.
+        # screen="/verify-email-stack/verify-email" # <- Попробуем это
+        # Или screen="", если не требуется для этого конкретного запроса.
+        # Проверим, что использовалось в changeEmail: screen="/verify-email-stack/verify-email"
+        # Используем тот же screen, что и changeEmail, как логичный контекст.
+        return await self._make_request("ConfirmEmail", query, variables, requires_auth=True,
+                                        screen="/verify-email-stack/verify-email")
+
     async def get_item_detail_data_by_listing_id(self, listing_id: str, is_logged_in: bool = True,
                                                  device_location: Dict[str, float] = None) -> Dict[str, Any]:
         """
@@ -679,8 +783,8 @@ class OfferUpAPI:
         """
 
         # Генерация timestamp и uniqueId для header
-        current_time_iso = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
-        local_time_iso = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+        current_time_iso = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+        local_time_iso = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
 
         variables = {
             "itemId": item_id,
@@ -1474,9 +1578,1015 @@ class OfferUpAPI:
         return await self._make_request("ChangePhoneNumberConfirm", query, variables, requires_auth=True,
                                         screen="EnterCode")
 
+
+    async def get_category_taxonomy(self) -> Dict[str, Any]:
+        """Получает иерархию категорий OfferUp."""
+        query = """
+        query GetCategoryTaxonomy($input: GetTaxonomyInput) {
+          getTaxonomy(input: $input) {
+            ...categoryTaxonomy
+            __typename
+          }
+        }
+
+        fragment categoryTaxonomy on CategoryTaxonomy {
+          children {
+            id
+            currentLevelId
+            level
+            label
+            order
+            path
+            children {
+              id
+              currentLevelId
+              level
+              label
+              order
+              path
+              children {
+                id
+                currentLevelId
+                level
+                label
+                order
+                path
+                __typename
+              }
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        """
+        variables = {"input": {}}
+        # Этот вызов не требует аутентификации
+        # x-ou-screen не указан в оригинальном запросе
+        return await self._make_request("GetCategoryTaxonomy", query, variables, requires_auth=False, screen="")
+
+    async def get_new_listings_in_category(
+            self,
+            category_id: str,
+            distance: int = 50,
+            latitude: float = 40.7360524,
+            longitude: float = -73.9800987,
+            zipcode: str = "10010",
+            page_cursor: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Получает новые объявления в указанной категории, отсортированные по новизне.
+        Требует аутентификации (JWT токен).
+        """
+        query = """
+        query GetModularFeed($searchParams: [SearchParam], $debug: Boolean = false) {
+          modularFeed(params: $searchParams, debug: $debug) {
+            ...modularFeedResponse
+            __typename
+          }
+        }
+
+        fragment baseFilterParams on ModularFeedBaseFilter {
+          shortcutLabel
+          shortcutRank
+          subTitle
+          targetName
+          title
+          type
+          isExpandedHighlight
+          __typename
+        }
+
+        fragment modularFilterNumericRangeBound on ModularFeedNumericRangeFilterNumericRangeBound {
+          label
+          limit
+          placeholderText
+          targetName
+          value
+          __typename
+        }
+
+        fragment modularFilterNumericRange on ModularFeedNumericRangeFilter {
+          ...baseFilterParams
+          lowerBound {
+            ...modularFilterNumericRangeBound
+            __typename
+          }
+          upperBound {
+            ...modularFilterNumericRangeBound
+            __typename
+          }
+          __typename
+        }
+
+        fragment modularFilterSelectionList on ModularFeedSelectionListFilter {
+          ...baseFilterParams
+          selectedValue
+          showSelectAll
+          options {
+            isDefault
+            isSelected
+            label
+            subLabel
+            value
+            __typename
+          }
+          __typename
+        }
+
+        fragment baseTileParams on ModularFeedTile {
+          tileId
+          tileType
+          __typename
+        }
+
+        fragment bannerTile on ModularFeedTileBanner {
+          ...baseTileParams
+          title
+          __typename
+        }
+
+        fragment emptyStateTile on ModularFeedTileEmptyState {
+          ...baseTileParams
+          title
+          description
+          iconType
+          __typename
+        }
+
+        fragment modularFeedListing on ModularFeedListing {
+          listingId
+          conditionText
+          flags
+          image {
+            height
+            url
+            width
+            __typename
+          }
+          isFirmPrice
+          locationName
+          price
+          formattedPrice
+          formattedOriginalPrice
+          priceDropPercentage
+          title
+          vehicleMiles
+          __typename
+        }
+
+        fragment listingTile on ModularFeedTileListing {
+          ...baseTileParams
+          listing {
+            ...modularFeedListing
+            __typename
+          }
+          __typename
+        }
+
+        fragment bingAdTile on ModularFeedTileBingAd {
+          ...baseTileParams
+          bingAd {
+            ouAdId
+            adExperimentId
+            adNetwork
+            adRequestId
+            adTileType
+            adSettings {
+              repeatClickRefractoryPeriodMillis
+              ctaType
+              ctaLabel
+              collapsible
+              __typename
+            }
+            bingClientId
+            clickFeedbackUrl
+            clickReturnUrl
+            contentUrl
+            deepLinkEnabled
+            experimentDataHash
+            image {
+              height
+              url
+              width
+              __typename
+            }
+            impressionFeedbackUrl
+            impressionUrls
+            viewableImpressionUrls
+            installmentInfo {
+              amount
+              description
+              downPayment
+              __typename
+            }
+            itemName
+            lowPrice
+            price
+            searchId
+            sellerName
+            templateFields {
+              key
+              value
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+
+        fragment AdSettingFields on AdSettings {
+          repeatClickRefractoryPeriodMillis
+          timeout
+          collapsible
+          loadStrategy
+          reloadEnabled
+          reloadCount
+          __typename
+        }
+
+        fragment googleDisplayAdTile on ModularFeedTileGoogleDisplayAd {
+          ...baseTileParams
+          googleDisplayAd {
+            ouAdId
+            additionalSizes
+            adExperimentId
+            adHeight
+            adNetwork
+            adPage
+            adRequestId
+            adSettings {
+              ...AdSettingFields
+              __typename
+            }
+            adTileType
+            adWidth
+            adaptive
+            channel
+            clickFeedbackUrl
+            clientId
+            contentUrl
+            neighboringContentUrls
+            customTargeting {
+              key
+              values
+              __typename
+            }
+            displayAdType
+            errorDrawable {
+              actionPath
+              listImage {
+                height
+                url
+                width
+                __typename
+              }
+              __typename
+            }
+            experimentDataHash
+            formatIds
+            impressionFeedbackUrl
+            personalizationProperties {
+              key
+              values
+              __typename
+            }
+            prebidConfigs {
+              key
+              values {
+                timeout
+                tamSlotUUID
+                liftoffPlacementIDs
+                nimbusPriceMapping
+                adPosition
+                __typename
+              }
+              __typename
+            }
+            renderLocation
+            searchId
+            searchQuery
+            templateId
+            __typename
+          }
+          __typename
+        }
+
+        fragment localDisplayAdTile on ModularFeedTileLocalDisplayAd {
+          ...baseTileParams
+          localDisplayAd {
+            ouAdId
+            adExperimentId
+            adNetwork
+            adRequestId
+            adTileType
+            advertiserId
+            businessName
+            callToAction
+            callToActionType
+            clickFeedbackUrl
+            contentUrl
+            experimentDataHash
+            headline
+            image {
+              height
+              url
+              width
+              __typename
+            }
+            impressionFeedbackUrl
+            searchId
+            __typename
+          }
+          __typename
+        }
+
+        fragment adsPostXAdTile on ModularFeedTileAdsPostXAd {
+          ...baseTileParams
+          adsPostXAd {
+            ouAdId
+            adExperimentId
+            adNetwork
+            adRequestId
+            adTileType
+            clickFeedbackUrl
+            experimentDataHash
+            impressionFeedbackUrl
+            searchId
+            offer {
+              beacons {
+                noThanksClick
+                close
+                __typename
+              }
+              title
+              description
+              clickUrl
+              image
+              pixel
+              ctaYes
+              ctaNo
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+
+        fragment customNativeAdTile on ModularFeedTileCustomNativeAd {
+          ...baseTileParams
+          customNativeAd {
+            ouAdId
+            adExperimentId
+            adNetwork
+            adRequestId
+            adTileType
+            clickFeedbackUrl
+            experimentDataHash
+            impressionFeedbackUrl
+            searchId
+            templateId
+            type
+            tileType
+            clickThroughUrl
+            adSettings {
+              repeatClickRefractoryPeriodMillis
+              collapsible
+              __typename
+            }
+            eventUrls {
+              eventType
+              urls
+              __typename
+            }
+            metadata {
+              key
+              value
+              __typename
+            }
+            templateData {
+              key
+              value
+              __typename
+            }
+            templateFields {
+              key
+              value
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+
+        fragment linkPreview on LinkPreview {
+          title
+          description
+          subtext
+          imageUrl
+          actionPath
+          originUrl
+          imageOverlayText
+          __typename
+        }
+
+        fragment communityPollOption on CommunityPollOption {
+          value
+          count
+          userSelected
+          __typename
+        }
+
+        fragment communityPoll on CommunityPoll {
+          id
+          hasVotedPoll
+          totalCount
+          options {
+            ...communityPollOption
+            __typename
+          }
+          __typename
+        }
+
+        fragment communityPost on CommunityPost {
+          id
+          parentId
+          postDate
+          title
+          description
+          upVoteCount
+          replyCount
+          hasUpVoted
+          hasSaved
+          poster {
+            userId
+            name
+            publicLocationName
+            avatars {
+              squareImage
+              __typename
+            }
+            avatarBadges {
+              primaryBadge
+              secondaryBadge
+              __typename
+            }
+            notActive
+            __typename
+          }
+          linkPreviews {
+            titleLinkPreviews {
+              ...linkPreview
+              __typename
+            }
+            descriptionLinkPreviews {
+              ...linkPreview
+              __typename
+            }
+            __typename
+          }
+          pollResults {
+            ...communityPoll
+            __typename
+          }
+          __typename
+        }
+
+        fragment communityPostTile on ModularFeedTileCommunityPost {
+          ...baseTileParams
+          post {
+            ...communityPost
+            __typename
+          }
+          __typename
+        }
+
+        fragment couponTile on ModularFeedTileCoupon {
+          tileId
+          tileType
+          coupon {
+            id
+            businessName
+            categoryId
+            businessId
+            endDate
+            logoImg
+            locations {
+              id
+              latitude
+              longitude
+              formattedAddress
+              street
+              city
+              state
+              zipCode
+              phone
+              __typename
+            }
+            offers {
+              id
+              detail
+              expDate
+              disclaimer
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+
+        fragment jobTile on ModularFeedTileJob {
+          ...baseTileParams
+          job {
+            address {
+              city
+              state
+              zipcode
+              __typename
+            }
+            companyName
+            datePosted
+            image {
+              height
+              url
+              width
+              __typename
+            }
+            industry
+            jobId
+            jobListingUrl
+            jobOwnerId
+            pills {
+              text
+              type
+              __typename
+            }
+            title
+            apply {
+              method
+              value
+              __typename
+            }
+            wageDisplayValue
+            provider
+            __typename
+          }
+          __typename
+        }
+
+        fragment localEvent on LocalEvent {
+          id
+          ownerId
+          title
+          startDate
+          endDate
+          timeZone
+          neighborhood
+          pills
+          category
+          categories
+          feedImageUrl
+          formattedDate {
+            time
+            month
+            dayOfMonth
+            dayOfWeek
+            date
+            isToday
+            __typename
+          }
+          __typename
+        }
+
+        fragment localEventTile on ModularFeedTileLocalEvent {
+          tileId
+          tileType
+          localEvent {
+            ...localEvent
+            __typename
+          }
+          __typename
+        }
+
+        fragment sellerAdTile on ModularFeedTileSellerAd {
+          ...baseTileParams
+          listing {
+            ...modularFeedListing
+            __typename
+          }
+          sellerAd {
+            ouAdId
+            adId
+            adExperimentId
+            adNetwork
+            adRequestId
+            adTileType
+            clickFeedbackUrl
+            experimentDataHash
+            impressionFeedbackUrl
+            impressionUrls
+            searchId
+            __typename
+          }
+          __typename
+        }
+
+        fragment rentalTile on ModularFeedTileRental {
+          tileId
+          tileType
+          rental {
+            name
+            id
+            rent
+            bedrooms
+            bathrooms
+            additionalUnits {
+              id
+              __typename
+            }
+            image {
+              id
+              thumbnail
+              detail
+              __typename
+            }
+            property {
+              id
+              name
+              location {
+                latitude
+                longitude
+                __typename
+              }
+              address {
+                street
+                city
+                state
+                zipCode
+                __typename
+              }
+              __typename
+            }
+            floorPlan {
+              id
+              squareFeet
+              __typename
+            }
+            partner
+            __typename
+          }
+          __typename
+        }
+
+        fragment searchAlertTile on ModularFeedTileSearchAlert {
+          ...baseTileParams
+          title
+          __typename
+        }
+
+        fragment serviceTile on ServiceListing {
+          id
+          businessName
+          businessLocation
+          yearsInBusiness
+          numberOfHires
+          numberOfEmployees
+          hasBackgroundCheck
+          licenseVerified
+          isTopPro
+          rating {
+            key
+            value
+            formatted
+            label
+            __typename
+          }
+          numReviews
+          reviews
+          serviceReviews {
+            author
+            profileImage
+            rating
+            text
+            createdDate
+            __typename
+          }
+          reviewsSource
+          featuredReview
+          description
+          imageUrl
+          backgroundImageUrl
+          location
+          pills {
+            key
+            label
+            __typename
+          }
+          responseTimeHours
+          quote {
+            startingCost
+            costUnit
+            label
+            __typename
+          }
+          additionalDetails {
+            key
+            label
+            __typename
+          }
+          categoryName
+          __typename
+        }
+
+        fragment thumbtackServiceTile on ModularFeedTileThumbtackService {
+          ...baseTileParams
+          thumbtackService {
+            ...serviceTile
+            iframeUrl
+            __typename
+          }
+          __typename
+        }
+
+        fragment inHouseServiceTile on ModularFeedTileInHouseService {
+          ...baseTileParams
+          inHouseService {
+            ...serviceTile
+            ownerId
+            subcategories
+            projectImages {
+              id
+              url
+              width
+              height
+              __typename
+            }
+            businessVerified
+            __typename
+          }
+          __typename
+        }
+
+        fragment localNews on LocalNews {
+          URL
+          formattedDate
+          id
+          imageURL
+          score
+          sentimentNegative
+          sentimentNeutral
+          sentimentPositive
+          source
+          sourceCity
+          summary
+          title
+          topics
+          categories
+          __typename
+        }
+
+        fragment localNewsTile on ModularFeedTileLocalNews {
+          tileId
+          tileType
+          localNews {
+            ...localNews
+            __typename
+          }
+          __typename
+        }
+
+        fragment baseModuleParams on ModularFeedModule {
+          moduleId
+          collection
+          formFactor
+          moduleType
+          rank
+          rowIndex
+          searchId
+          subTitle
+          title
+          infoActionPath
+          feedIndex
+          label
+          __typename
+        }
+
+        fragment moduleTileParams on ModularFeedTile {
+          moduleId
+          moduleRank
+          moduleType
+          __typename
+        }
+
+        fragment modularListingTile on ModularFeedTileListing {
+          ...listingTile
+          ...moduleTileParams
+          __typename
+        }
+
+        fragment modularBingAdTile on ModularFeedTileBingAd {
+          ...bingAdTile
+          ...moduleTileParams
+          __typename
+        }
+
+        fragment modularGoogleDisplayAdTile on ModularFeedTileGoogleDisplayAd {
+          ...googleDisplayAdTile
+          ...moduleTileParams
+          __typename
+        }
+
+        fragment modularLocalDisplayAdTile on ModularFeedTileLocalDisplayAd {
+          ...localDisplayAdTile
+          ...moduleTileParams
+          __typename
+        }
+
+        fragment modularCustomNativeAdTile on ModularFeedTileCustomNativeAd {
+          ...customNativeAdTile
+          ...moduleTileParams
+          __typename
+        }
+
+        fragment modularSellerAdTile on ModularFeedTileSellerAd {
+          ...sellerAdTile
+          ...moduleTileParams
+          __typename
+        }
+
+        fragment modularCommunityPostTile on ModularFeedTileCommunityPost {
+          ...communityPostTile
+          ...moduleTileParams
+          __typename
+        }
+
+        fragment modularThumbtackServiceTile on ModularFeedTileThumbtackService {
+          ...thumbtackServiceTile
+          ...moduleTileParams
+          __typename
+        }
+
+        fragment modularInHouseServiceTile on ModularFeedTileInHouseService {
+          ...inHouseServiceTile
+          ...moduleTileParams
+          __typename
+        }
+
+        fragment gridModule on ModularFeedModuleGrid {
+          ...baseModuleParams
+          grid {
+            actionPath
+            tiles {
+              ...modularListingTile
+              ...modularBingAdTile
+              ...modularGoogleDisplayAdTile
+              ...modularLocalDisplayAdTile
+              ...modularCustomNativeAdTile
+              ...modularSellerAdTile
+              ...modularCommunityPostTile
+              ...modularThumbtackServiceTile
+              ...modularInHouseServiceTile
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+
+        fragment modularFeedResponse on ModularFeedResponse {
+          analyticsData {
+            requestId
+            searchPerformedEventUniqueId
+            searchSessionId
+            __typename
+          }
+          categoryInfo {
+            categoryId
+            isForcedCategory
+            __typename
+          }
+          feedAdditions
+          filters {
+            ...modularFilterNumericRange
+            ...modularFilterSelectionList
+            __typename
+          }
+          looseTiles {
+            ...bannerTile
+            ...emptyStateTile
+            ...listingTile
+            ...bingAdTile
+            ...googleDisplayAdTile
+            ...localDisplayAdTile
+            ...adsPostXAdTile
+            ...customNativeAdTile
+            ...communityPostTile
+            ...couponTile
+            ...jobTile
+            ...localEventTile
+            ...sellerAdTile
+            ...rentalTile
+            ...searchAlertTile
+            ...thumbtackServiceTile
+            ...inHouseServiceTile
+            ...localNewsTile
+            __typename
+          }
+          modules {
+            ...gridModule
+            __typename
+          }
+          pageCursor
+          query {
+            appliedQuery
+            decisionType
+            originalQuery
+            suggestedQuery
+            __typename
+          }
+          requestTimeMetadata {
+            resolverComputationTimeSeconds
+            serviceRequestTimeSeconds
+            totalResolverTimeSeconds
+            __typename
+          }
+          searchAlert {
+            alertId
+            alertStatus
+            searchAlertCount
+            __typename
+          }
+          personalizationPath
+          debugInformation @include(if: $debug) {
+            rankedListings {
+              listingId
+              attributes {
+                key
+                value
+                __typename
+              }
+              __typename
+            }
+            lastViewedItems {
+              listingId
+              attributes {
+                key
+                value
+                __typename
+              }
+              __typename
+            }
+            categoryAffinities {
+              affinity
+              count
+              decay
+              affinityOwner
+              __typename
+            }
+            rankingStats {
+              key
+              value
+              __typename
+            }
+            modules {
+              moduleType
+              title
+              rank
+              value
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        """
+
+        variables = {
+            "debug": False,
+            "searchParams": [
+                {"key": "DISTANCE", "value": str(distance)},
+                {"key": "SORT", "value": "newest"},  # <-- Ключевой параметр для сортировки по новизне
+                {"key": "cid", "value": category_id},
+                {"key": "lat", "value": str(latitude)},
+                {"key": "lon", "value": str(longitude)},
+                {"key": "zipcode", "value": zipcode},
+            ]
+        }
+
+        # Если передан page_cursor, добавляем его в searchParams
+        if page_cursor:
+            variables["searchParams"].append({"key": "pageCursor", "value": page_cursor})
+
+        # Этот вызов требует аутентификации
+        # x-ou-screen указан как "ItemsSearchFeed"
+        return await self._make_request("GetModularFeed", query, variables, requires_auth=True,
+                                        screen="ItemsSearchFeed")
+
     async def close(self):
         """
         Закрывает aiohttp сессию.
         """
         if self._session and not self._session.closed:
             await self._session.close()
+
+

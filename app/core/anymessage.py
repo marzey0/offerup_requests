@@ -1,7 +1,8 @@
+# app/core/anymessage.py
 import aiohttp
 from typing import Optional, Dict, Any, Union
 
-from config import ANYMESSAGE_API_KEY
+from config import ANYMESSAGE_API_KEY, ANYMESSAGE_EMAIL_SITE, ANYMESSAGE_EMAIL_DOMAIN
 
 
 class AnyMessageAPIError(Exception):
@@ -23,7 +24,7 @@ class AnyMessageClient:
         Args:
             token (str): Токен аутентификации пользователя.
         """
-        self.base_url = "https://anymessage.io/api"
+        self.base_url = "https://api.anymessage.shop"
         self.token = token
         self._session: Optional[aiohttp.ClientSession] = None
 
@@ -90,7 +91,7 @@ class AnyMessageClient:
 
                 # Для остальных - JSON
                 json_response = await response.json()
-                if json_response.get("status") == "error":
+                if json_response.get("status") == "error" and json_response.get("value") != "wait message":
                     raise AnyMessageAPIError(f"API Error: {json_response.get('value', 'Unknown error')}")
                 return json_response
 
@@ -267,24 +268,46 @@ class AnyMessageClient:
 
 
 # --- Пример использования ---
-# async def main():
-#     """
-#     Пример тестирования методов клиента через асинхронный контекстный менеджер.
-#     """
-#     # Замените на реальный токен
-#     async with AnyMessageClient(token="EXAMPLE") as client:
-#         try:
-#             # Получить баланс
-#             print("Получение баланса...")
-#             balance_data = await client.get_balance()
-#             print(f"   Баланс: {balance_data.get('balance', 'N/A')}")
-#
-#         except AnyMessageAPIError as e:
-#             print(f"\nAPI ошибка: {e}")
-#         except Exception as e:
-#             print(f"\nПроизошла ошибка: {e}")
-#
-#
-# if __name__ == "__main__":
-#     import asyncio
-#     asyncio.run(main())
+async def main():
+    """
+    Пример тестирования методов клиента через асинхронный контекстный менеджер.
+    """
+    # Замените на реальный токен
+    async with AnyMessageClient(token=ANYMESSAGE_API_KEY) as client:
+        try:
+            order_response = await client.order_email(site=ANYMESSAGE_EMAIL_SITE, domain=ANYMESSAGE_EMAIL_DOMAIN)
+            email = order_response['email']
+            anymessage_email_id = order_response['id']
+            print(f"Заказан email: {email}, ID: {anymessage_email_id}")
+            print("Ожидаю письмо... Ссылка подтверждения будет выдана автоматически!")
+
+            while True:
+                message_response = await client.get_message(email_id=anymessage_email_id)
+                message_status = message_response.get('status')
+                if message_status == 'error' and message_response.get('value') == 'wait message':
+                    await asyncio.sleep(3)
+                    continue
+                elif message_status == 'success':
+                    message_content = message_response.get('message', '')
+                    match = re.search(
+                        r'href=[\'"]([^\'"]*offerup\.com[^\s\'"]*confirm-email[^\s\'"]*)[\'"]',
+                        message_content
+                    )
+                    if match:
+                        link_url = match.group(1).replace('&amp;', '&')  # Заменяем &amp; на &
+                        print(f"Найден URL в письме: {link_url}")
+                        break
+
+                print(f"Что-то пошло не так... {message_response=}")
+                break
+
+        except AnyMessageAPIError as e:
+            print(f"\nAPI ошибка: {e}")
+        except Exception as e:
+            print(f"\nПроизошла ошибка: {e}")
+
+
+if __name__ == "__main__":
+    import asyncio
+    import re
+    asyncio.run(main())
