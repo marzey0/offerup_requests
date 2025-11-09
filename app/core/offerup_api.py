@@ -98,6 +98,8 @@ class OfferUpAPI:
         self.user_context = user_context or {}
         self.anymessage_email_id = anymessage_email_id
 
+
+
     @staticmethod
     def load_from_file(filepath: str) -> Optional['OfferUpAPI']:
         try:
@@ -579,7 +581,6 @@ class OfferUpAPI:
             "token": token,
             "challengeId": None  # challenge_id из URL в примере был пустым, передаём null
         }
-        self.cookies = {}
         return await self._make_request("ConfirmEmail", query, variables, requires_auth=True,
                                         screen="/verify-email-stack/verify-email")
 

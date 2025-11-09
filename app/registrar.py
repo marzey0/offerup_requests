@@ -230,6 +230,7 @@ class AccountRegistrar:
                                     # Если ответ успешный (без ошибок), считаем, что email подтверждён
                                     if confirm_response and 'errors' not in confirm_response:
                                         logger.debug("Email успешно подтверждён через API (confirm_email_from_token).")
+                                        return True
                                     else:
                                         logger.error(f"Ошибка подтверждения email через API: {confirm_response.get('errors')}")
                                         return False
