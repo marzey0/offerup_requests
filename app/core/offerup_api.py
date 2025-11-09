@@ -72,6 +72,7 @@ class OfferUpAPI:
         user_id: Optional[str] = None,
         user_context: Optional[Dict[str, Any]] = None,
         anymessage_email_id: Optional[str] = None,
+        **kwargs
     ):
         """
         Инициализирует клиент OfferUpAPI.
@@ -1665,7 +1666,7 @@ class OfferUpAPI:
             distance: int = 50,
             latitude: float = 40.7360524,
             longitude: float = -73.9800987,
-            zipcode: str = "10010",
+            zipcode: str = "90001",
             page_cursor: Optional[str] = None
     ) -> Dict[str, Any]:
         """
@@ -2599,11 +2600,11 @@ class OfferUpAPI:
             "debug": False,
             "searchParams": [
                 {"key": "DISTANCE", "value": str(distance)},
-                {"key": "SORT", "value": "newest"},  # <-- Ключевой параметр для сортировки по новизне
+                {"key": "SORT", "value": "newest"},
                 {"key": "cid", "value": category_id},
-                {"key": "lat", "value": str(latitude)},
-                {"key": "lon", "value": str(longitude)},
-                {"key": "zipcode", "value": zipcode},
+                # {"key": "lat", "value": str(latitude)},
+                # {"key": "lon", "value": str(longitude)},
+                # {"key": "zipcode", "value": zipcode},
             ]
         }
 

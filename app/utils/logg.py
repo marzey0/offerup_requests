@@ -1,7 +1,7 @@
 # app/utils/logg.py
 import logging
 
-def setup_logging():
+def setup_logging(level=logging.INFO):
     """
     Настраивает корневой логгер приложения.
     Уровень DEBUG для собственного кода (app.*), WARNING для сторонних библиотек.

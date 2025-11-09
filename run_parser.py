@@ -10,7 +10,7 @@ from config import DATABASE_PATH, PARSER_DELAY
 
 
 # --- Настройка логирования ---
-logger_instance = setup_logging()
+logger_instance = setup_logging(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 

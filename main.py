@@ -41,7 +41,7 @@ class MainApp:
 
         logger.info("Создание экземпляров компонентов...")
         self.parser = OfferUpParser(db_path=self.db_path, delay=PARSER_DELAY)
-        self.sender = MessageSender(db_path=self.db_path, delay=SENDER_DELAY)
+        self.sender = MessageSender(db_path=self.db_path)
         self.registrar = AccountRegistrar(delay=REGISTRAR_DELAY)
 
         logger.info("Экземпляры компонентов созданы.")
