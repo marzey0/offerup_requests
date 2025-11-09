@@ -579,21 +579,7 @@ class OfferUpAPI:
             "token": token,
             "challengeId": None  # challenge_id из URL в примере был пустым, передаём null
         }
-        # screen для подтверждения email, скорее всего, тот же, что и для VerifyEmail
-        # или может быть "/accounts/register/confirm-email" - проверить в реальном трафике
-        # Пока используем screen, связанный с VerifyEmail из предыдущих примеров
-        # screen="/verify-email-stack/verify-email" или "/verify-email"
-        # Проверим из curl: Referer содержит confirm-email, x-ou-operation-name: ConfirmEmail
-        # screen может быть "/accounts/register/confirm-email" или "/verify-email-stack/verify-email"
-        # Попробуем более общий "/verify-email-stack/verify-email", но можно уточнить
-        # Из curl: Referer: .../confirm-email?... -> screen="/accounts/register/confirm-email" ?
-        # screen="/accounts/register/confirm-email" # <- Попробуем этот screen, он логичен
-        # Однако, screen может быть и другим. В curl он не указан напрямую, но есть в Referer и operationName.
-        # Попробуем screen="/verify-email-stack/verify-email", так как он ассоциирован с VerifyEmail.
-        # screen="/verify-email-stack/verify-email" # <- Попробуем это
-        # Или screen="", если не требуется для этого конкретного запроса.
-        # Проверим, что использовалось в changeEmail: screen="/verify-email-stack/verify-email"
-        # Используем тот же screen, что и changeEmail, как логичный контекст.
+        self.cookies = {}
         return await self._make_request("ConfirmEmail", query, variables, requires_auth=True,
                                         screen="/verify-email-stack/verify-email")
 

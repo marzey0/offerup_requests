@@ -79,7 +79,7 @@ class AccountRegistrar:
 
         # --- 2. Подготовка данных аккаунта ---
         password = self._generate_random_password()
-        name = self.faker.name()  # Используем Faker для имени
+        name = self.faker.user_name()
         proxy = MAIN_PROXY
 
         logger.debug(f"Регистрация аккаунта: {ordered_email}, proxy: {proxy}")
