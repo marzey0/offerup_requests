@@ -79,36 +79,8 @@ class AccountManager:
             logger.error(f"Нет данных аккаунта для ключа {key}")
             return None
 
-        # Извлекаем pasta из JSON
-        pasta = account_data.get('pasta', [])
-        if not pasta:
-            logger.warning(f"У аккаунта {key} нет 'pasta' в JSON. Используется пустой список.")
-
-        # Извлекаем proxy из JSON, fallback на None
-        proxy = account_data.get('proxy')
-
-        # Создаём новый экземпляр OfferUpAPI с прокси из JSON
-        api_instance = OfferUpAPI(proxy=proxy)
-
-        # Инициализируем его данными из JSON
-        api_instance._session_id = account_data.get('session_id', api_instance._session_id)
-        api_instance._device_id = account_data.get('device_id', api_instance._device_id)
-        api_instance._user_agent, api_instance._browser_user_agent = account_data.get('user_agent', api_instance._user_agent), account_data.get('browser_user_agent', api_instance._browser_user_agent)
-        api_instance._advertising_id = account_data.get('advertising_id', api_instance._advertising_id)
-        # Устанавливаем pasta как атрибут экземпляра
-        api_instance._pasta = pasta
-        # Устанавливаем _anymessage_email_id, если есть
-        api_instance._anymessage_email_id = account_data.get('anymessage_email_id', api_instance._anymessage_email_id)
-
-        # Устанавливаем токены и ID, если они есть
-        jwt_token = account_data.get('jwt_token')
-        refresh_token = account_data.get('refresh_token')
-        user_id = account_data.get('user_id')
-
-        if jwt_token and refresh_token:
-            api_instance.update_auth_tokens(jwt_token, refresh_token)
-        if user_id:
-            api_instance.update_session_data(user_id)
+        # Создаём новый экземпляр OfferUpAPI
+        api_instance = OfferUpAPI(**account_data)
 
         # Кэшируем экземпляр
         self.api_instances[key] = api_instance

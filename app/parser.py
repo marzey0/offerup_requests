@@ -105,7 +105,7 @@ class OfferUpParser:
                 logger.warning(f"Категория без ID или названия, пропущена: {category}")
                 continue
 
-            logger.info(f"Парсинг категории: {cat_label} (ID: {cat_id})")
+            logger.debug(f"Парсинг категории: {cat_label} (ID: {cat_id})")
 
             try:
                 # Получаем объявления для категории
@@ -157,7 +157,7 @@ class OfferUpParser:
                     )
                     if added:
                         if ratings_count == 0:
-                            logger.info(f"Новое объявление {ad_id} от продавца {seller_id} (ratings_count == 0) добавлено в БД с processed=1.")
+                            logger.info(f"Новое объявление {title} от продавца {seller_id} (ratings_count == 0) добавлено в БД с processed=1.")
                         else:
                             logger.info(f"Новое объявление {ad_id} от продавца {seller_id} (ratings_count != 0) добавлено в БД с processed=0.")
                     else:

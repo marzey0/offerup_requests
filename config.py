@@ -26,7 +26,7 @@ OFFERUP_APP_VERSION = "2025.42.0"
 OFFERUP_BUILD = "2025420004"
 REGISTRAR_DELAY = 5
 MAIN_PROXY = os.getenv("MAIN_PROXY")
-MESSAGES = ["hi, bro"]
+DEFAULT_PASTA = ["hi, bro"]
 
 DATABASE_PATH = "data/main.db"
 os.makedirs("data", exist_ok=True)
@@ -35,8 +35,8 @@ os.makedirs(ACCOUNTS_DIR, exist_ok=True)
 PARSER_DELAY = 15
 
 # -- Настройки сендера
-SENDER_DELAY = 1
-SENDER_COOLDOWN_SECONDS = 5
+SENDER_DELAY_BETWEEN_MESSAGES = 1
+SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT = 5
 
 
 # -- Настройки парсера --

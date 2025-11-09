@@ -52,7 +52,6 @@ async def add_ad_if_new(db_path: str, ad_id: str, title: str, seller_id: str, ra
         # Проверяем, подходит ли объявление под критерии (0 отзывов)
         if ratings_count == 0:
             processed_status = 1  # Требует обработки
-            logger.info(f"Новое объявление {ad_id} от продавца {seller_id} подходит под фильтр (0 отзывов).")
         else:
             processed_status = 0  # Не требует обработки
 

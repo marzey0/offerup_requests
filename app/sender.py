@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional
 from app.core.offerup_api import OfferUpAPI
 from app.core.database import get_unprocessed_ads, mark_ad_as_processed
 from app.account_manager import AccountManager
-from config import SENDER_DELAY, SENDER_COOLDOWN_SECONDS
+from config import SENDER_DELAY, SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT, SENDER_DELAY_BETWEEN_MESSAGES
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class MessageSender:
                     await asyncio.sleep(self.delay)
                     continue
 
-                logger.info(f"Используем аккаунт {account_key} для отправки сообщения по объявлению {ad_id}.")
+                logger.debug(f"Используем аккаунт {account_key} для отправки сообщения по объявлению {ad_id}.")
 
                 # Получаем API клиент для выбранного аккаунта
                 api_client = self.account_manager.get_api_instance(account_key)
@@ -67,7 +67,7 @@ class MessageSender:
                     continue
 
                 # Отправляем сообщение
-                success = await self._send_message_to_seller(api_client, ad)
+                success = await self._send_pasta_to_seller(api_client, ad)
                 if success:
                     # Помечаем объявление как обработанное
                     marked = await mark_ad_as_processed(self.db_path, ad_id)
@@ -107,7 +107,7 @@ class MessageSender:
             key = account_keys[idx]
 
             last_used = self.account_last_used.get(key, 0)
-            if current_time - last_used >= SENDER_COOLDOWN_SECONDS:
+            if current_time - last_used >= SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT:
                 # Нашли подходящий аккаунт
                 self.account_index = (idx + 1) % num_accounts # Обновляем индекс для следующего раза
                 return key
@@ -116,41 +116,38 @@ class MessageSender:
         logger.debug("Нет доступных аккаунтов, все на cooldown.")
         return None
 
-    async def _send_message_to_seller(self, api_client: OfferUpAPI, ad: Dict[str, Any]) -> bool:
+    async def _send_pasta_to_seller(self, api_client: OfferUpAPI, ad: Dict[str, Any]) -> bool:
         """
         Отправляет сообщение продавцу по указанному объявлению, используя post_first_message.
         """
         ad_id = ad['ad_id']
-        # seller_id = ad['seller_id'] # seller_id не нужен для post_first_message
-
-        # Выбираем случайное сообщение из pasta аккаунта, установленной AccountManager
-        pasta = api_client._pasta
-        if not pasta:
-            logger.warning("У аккаунта нет 'pasta'. Используется стандартное сообщение.")
-            message_text = "Привет, интересует ваш товар."
-        else:
-            message_text = random.choice(pasta)
-
-        logger.info(f"Отправка сообщения '{message_text}' по объявлению {ad_id}.")
 
         try:
             async with api_client as ac: # Открываем сессию
-                # 1. Отправить первое сообщение в чат по объявлению
-                logger.debug(f"Отправляем первое сообщение '{message_text}' по объявлению {ad_id}...")
-                post_first_message_response = await ac.post_first_message(listing_id=ad_id, text=message_text)
-                if not post_first_message_response or 'errors' in post_first_message_response:
-                    logger.error(f"Ошибка при отправке первого сообщения: {post_first_message_response}")
-                    return False
+                discussion_id = None
+                for msg_num, msg_text in enumerate(ac.pasta, start=1):
+                    logger.debug(f"Отправляем {msg_num} сообщение '{msg_text[:15]}' по объявлению {ad_id}...")
+                    if msg_num == 1:
+                        post_first_message_response = await ac.post_first_message(listing_id=ad_id, text=msg_text)
+                        if not post_first_message_response or 'errors' in post_first_message_response:
+                            logger.error(f"Ошибка при отправке первого сообщения: {post_first_message_response}")
+                            return False
+                        if discussion_id := post_first_message_response.get('data', {}).get('postFirstMessage', {}).get('discussionId'):
+                            logger.info(f"Сообщение успешно отправлено, создан чат с ID: {discussion_id}.")
+                            continue
+                    else:
+                        if not discussion_id:
+                            logger.info(f"Первое сообщение не вернуло discussionId.")
+                            return False
+                        await asyncio.sleep(SENDER_DELAY_BETWEEN_MESSAGES)
+                        post_message_response = await ac.post_message(listing_id=discussion_id, text=msg_text)
+                        if not post_message_response or 'errors' in post_message_response:
+                            logger.error(f"Ответ на отправку сообщения в чат содержит ошибки: {post_message_response}")
+                            return False
+                        logger.debug(f"Сообщение {msg_num} отправлено успешно!")
+                        continue
 
-                # 2. Проверим, успешно ли создалось обсуждение (опционально, в зависимости от структуры ответа)
-                # В ответе на post_first_message может быть discussionId
-                discussion_id = post_first_message_response.get('data', {}).get('postFirstMessage', {}).get('discussionId')
-                if discussion_id:
-                    logger.info(f"Сообщение успешно отправлено, создан чат с ID: {discussion_id}.")
-                else:
-                    # Если discussionId нет, но ошибки тоже нет, возможно, сообщение отправлено успешно
-                    logger.info(f"Сообщение успешно отправлено по объявлению {ad_id} (discussionId не возвращён, но ошибок нет).")
-
+                logger.info(f"Объявление {ad_id} успешно обработано!")
                 return True
 
         except Exception as e:

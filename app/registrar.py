@@ -14,7 +14,7 @@ from app.core.anymessage import AnyMessageClient
 from app.core.greedy_sms import GreedySMSClient
 from config import (
     REGISTRAR_DELAY,
-    MESSAGES,
+    DEFAULT_PASTA,
     MAIN_PROXY,
     GREEDY_COUNTRY_ID,
     GREEDY_SERVICE_ID,
@@ -82,7 +82,7 @@ class AccountRegistrar:
         name = self.faker.name()  # Используем Faker для имени
         proxy = MAIN_PROXY
 
-        logger.info(f"Регистрация аккаунта: {ordered_email}, proxy: {proxy}")
+        logger.debug(f"Регистрация аккаунта: {ordered_email}, proxy: {proxy}")
 
         # --- 3. Регистрация ---
         try:
@@ -93,15 +93,15 @@ class AccountRegistrar:
                     logger.error(f"Ошибка регистрации для {ordered_email}: {signup_response}")
                     return False
 
-                jwt_token = offerup._jwt_token
-                refresh_token = offerup._refresh_token
-                user_id = offerup._user_id  # Получили user_id после регистрации
+                jwt_token = offerup.jwt_token
+                refresh_token = offerup.refresh_token
+                user_id = offerup.user_id  # Получили user_id после регистрации
 
                 if not jwt_token or not refresh_token or not user_id:
                     logger.error(f"Не все токены/ID получены при регистрации {ordered_email}.")
                     return False
 
-                logger.info(f"Регистрация {ordered_email} успешна. Получены токены и user_id.")
+                logger.debug(f"Регистрация {ordered_email} успешна. Получены токены и user_id.")
 
         except Exception as e:
             logger.error(f"Ошибка при регистрации или инициации верификации email для {ordered_email}: {e}")
@@ -128,19 +128,19 @@ class AccountRegistrar:
             jwt_token=jwt_token,
             refresh_token=refresh_token,
             user_id=user_id,
-            pasta=MESSAGES,
-            user_agent=self.offerup_api._user_agent,
-            browser_user_agent=self.offerup_api._browser_user_agent,
+            pasta=DEFAULT_PASTA,
+            user_agent=self.offerup_api.user_agent,
+            browser_user_agent=self.offerup_api.browser_user_agent,
             proxy=proxy,
-            session_id=self.offerup_api._session_id,
-            device_id=self.offerup_api._device_id,
-            advertising_id=self.offerup_api._advertising_id,
+            session_id=self.offerup_api.session_id,
+            device_id=self.offerup_api.device_id,
+            advertising_id=self.offerup_api.advertising_id,
             anymessage_email_id=email_id,
             email_verified=True,  # Устанавливаем как True, если _wait_for_verification_email_and_confirm вернул True
             phone_verified=False
         )
 
-        logger.info(f"Аккаунт {ordered_email} успешно сохранён в файл.")
+        logger.info(f"Зарегистрирован новый аккаунт: {ordered_email}")
         return True
 
     @staticmethod
@@ -163,7 +163,7 @@ class AccountRegistrar:
         """
         Заказывает email через AnyMessage API и возвращает (email, email_id) или (None, None) при ошибке.
         """
-        logger.info("Заказ email через AnyMessage для регистрации.")
+        logger.debug("Заказ email через AnyMessage для регистрации.")
         async with self.anymessage_client as anymessage:
             try:
                 order_response = await anymessage.order_email(site=ANYMESSAGE_EMAIL_SITE, domain=ANYMESSAGE_EMAIL_DOMAIN)
@@ -173,7 +173,7 @@ class AccountRegistrar:
 
                 self.email = order_response['email']
                 self.anymessage_email_id = order_response['id']
-                logger.info(f"Заказан email: {self.email}, ID: {self.anymessage_email_id}")
+                logger.debug(f"Заказан email: {self.email}, ID: {self.anymessage_email_id}")
                 return self.email, self.anymessage_email_id
 
             except Exception as e:
@@ -186,7 +186,7 @@ class AccountRegistrar:
         затем вызывает API для подтверждения email.
         Возвращает True при успехе.
         """
-        logger.info(f"Ожидание письма с подтверждением email (ID: {email_id}) через AnyMessage.")
+        logger.debug(f"Ожидание письма с подтверждением email (ID: {email_id}) через AnyMessage.")
         await asyncio.sleep(30)
         async with self.anymessage_client as anymessage:
             try:
@@ -207,7 +207,7 @@ class AccountRegistrar:
                         match = re.search(r'href=[\'"]([^\'"]*offerup\.com[^\s\'"]*confirm-email[^\s\'"]*)[\'"]', message_content)
                         if match:
                             link_url = match.group(1).replace('&amp;', '&') # Заменяем &amp; на &
-                            logger.info(f"Найден URL в письме: {link_url}")
+                            logger.debug(f"Найден URL в письме: {link_url}")
 
                             # Извлекаем параметры из URL
                             from urllib.parse import urlparse, parse_qs
@@ -221,10 +221,7 @@ class AccountRegistrar:
                                 logger.error(f"Не удалось извлечь user_id или token из URL: {link_url}")
                                 return False
 
-                            logger.info(f"Извлечены user_id и token для подтверждения email.")
-
-                            # --- НОВОЕ: Вызов API подтверждения email ---
-                            logger.info("Отправка запроса подтверждения email через API...")
+                            logger.debug("Отправка запроса подтверждения email через API...")
                             try:
                                 async with self.offerup_api as ac: # Открываем сессию для API запроса
                                     confirm_response = await ac.confirm_email_from_token(user_id=user_id, token=token)
@@ -232,39 +229,13 @@ class AccountRegistrar:
                                     logger.debug(f"Ответ confirm_email_from_token: {confirm_response}")
                                     # Если ответ успешный (без ошибок), считаем, что email подтверждён
                                     if confirm_response and 'errors' not in confirm_response:
-                                        logger.info("Email успешно подтверждён через API (confirm_email_from_token).")
+                                        logger.debug("Email успешно подтверждён через API (confirm_email_from_token).")
                                     else:
                                         logger.error(f"Ошибка подтверждения email через API: {confirm_response.get('errors')}")
                                         return False
                             except Exception as e_api:
                                 logger.error(f"Ошибка при вызове confirm_email_from_token: {e_api}", traceback.format_exc())
                                 return False
-                            # --- КОНЕЦ НОВОГО ---
-
-                            # --- Проверка статуса email через API ---
-                            logger.info("Проверка статуса верификации email через API...")
-                            # Ждём немного, чтобы OfferUp успел обновить статус после confirm_email
-                            await asyncio.sleep(10)
-                            try:
-                                async with self.offerup_api as ac: # Открываем сессию для API запроса
-                                    auth_user_response = await ac.get_auth_user()
-                                    # Логируем ответ для отладки (можно убрать позже)
-                                    logger.debug(f"Ответ get_auth_user после подтверждения: {auth_user_response}")
-                                    # Извлекаем статус верификации из ответа
-                                    is_email_verified = auth_user_response.get('data', {}).get('me', {}).get('profile', {}).get('isEmailVerified', False)
-                                    if is_email_verified:
-                                        logger.info("Статус email подтверждён подтверждён через API (get_auth_user).")
-                                        return True # Успех!
-                                    else:
-                                        logger.warning("API сообщил, что email НЕ подтверждён, хотя запрос confirm_email был успешен.")
-                                        # Можно попробовать ещё раз или вернуть False
-                                        # Пока вернём False
-                                        return False
-                            except Exception as e_api:
-                                logger.error(f"Ошибка при проверке статуса email через API: {e_api}")
-                                return False
-                            # --- КОНЕЦ ПРОВЕРКИ ---
-
                         else:
                             logger.warning("Ссылка подтверждения не найдена в письме (message).")
                     else:
@@ -282,7 +253,7 @@ class AccountRegistrar:
         """
         Верифицирует телефон, используя GreedySMS API.
         """
-        logger.info("Начало верификации телефона через GreedySMS.")
+        logger.debug("Начало верификации телефона через GreedySMS.")
         async with self.greedy_sms as sms_client:
             try:
                 # 1. Получить номер
@@ -299,7 +270,7 @@ class AccountRegistrar:
 
                 activation_id = number_response['id']
                 phone_number = number_response['number']
-                logger.info(f"Получен номер: {phone_number}, ID активации: {activation_id}")
+                logger.debug(f"Получен номер: {phone_number}, ID активации: {activation_id}")
 
                 # 2. Отправить номер на OfferUp
                 logger.debug(f"Отправка номера {phone_number} на OfferUp...")
@@ -321,7 +292,7 @@ class AccountRegistrar:
                     status = status_response.get('status')
                     if status == 'success' and 'code' in status_response:
                         otp_code = status_response['code']
-                        logger.info(f"Получен OTP-код: {otp_code}")
+                        logger.debug(f"Получен OTP-код: {otp_code}")
                         # 4. Подтвердить номер с OTP
                         logger.debug(f"Подтверждение номера {phone_number} с OTP {otp_code}...")
                         confirm_response = await self.offerup_api.change_phone_number_confirm(
@@ -332,7 +303,7 @@ class AccountRegistrar:
                         if 'errors' in confirm_response:
                             logger.error(f"Ошибка при подтверждении номера: {confirm_response}")
                             return False
-                        logger.info("Номер успешно подтверждён.")
+                        logger.debug("Номер успешно подтверждён.")
                         return True
                     elif status in ['timeout', 'banned', 'canceled']:
                         logger.error(f"Статус активации {status}, номер: {phone_number}.")
@@ -397,6 +368,6 @@ class AccountRegistrar:
         try:
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(account_data, f, ensure_ascii=False, indent=4)
-            logger.info(f"Файл аккаунта сохранён: {filepath}")
+            logger.debug(f"Файл аккаунта сохранён: {filepath}")
         except Exception as e:
             logger.error(f"Ошибка при сохранении файла аккаунта {filepath}: {e}")

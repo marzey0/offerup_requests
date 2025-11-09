@@ -11,7 +11,7 @@ import aiohttp
 from aiohttp import ClientSession
 from aiohttp_socks import ProxyConnector
 
-from config import MAIN_PROXY, OFFERUP_APP_VERSION, OFFERUP_BUILD
+from config import MAIN_PROXY, OFFERUP_APP_VERSION, OFFERUP_BUILD, DEFAULT_PASTA
 
 logger = logging.getLogger(__name__)
 
@@ -58,46 +58,80 @@ class OfferUpAPI:
     BASE_URL = "https://client-graphql.offerup.com/"
     DUMMY_TOKEN = "dummy"
 
-    def __init__(self, proxy: str = MAIN_PROXY):
+    def __init__(self,
+        proxy: str = MAIN_PROXY,
+        pasta: list = DEFAULT_PASTA,
+        session_id = f"{str(uuid.uuid4())}@{random.randint(1111111111111, 9999999999999)}",
+        device_id = str(uuid.uuid4()).replace("-", "")[:-16],
+        advertising_id = str(uuid.uuid4()),
+        user_agent: Optional[str] = None,
+        browser_user_agent: Optional[str] = None,
+        cookies: Optional[dict[str, str]] = None,
+        jwt_token: Optional[str] = None,
+        refresh_token: Optional[str] = None,
+        user_id: Optional[str] = None,
+        user_context: Optional[Dict[str, Any]] = None,
+        anymessage_email_id: Optional[str] = None,
+    ):
         """
         Инициализирует клиент OfferUpAPI.
         Генерирует уникальные идентификаторы и User-Agent для этой сессии/аккаунта.
         """
         self.proxy = proxy
+        self.pasta = pasta
         self._session: Optional[ClientSession] = None
 
         # Генерация уникальных данных для аккаунта/сессии
-        self._session_id = f"{str(uuid.uuid4())}@{random.randint(1111111111111, 9999999999999)}"
-        self._device_id = str(uuid.uuid4()).replace("-", "")[:-16]
-        self._advertising_id = str(uuid.uuid4())
-        self._user_agent, self._browser_user_agent = generate_random_user_agent()
+        self.session_id = session_id
+        self.device_id = device_id
+        self.advertising_id = advertising_id
+        self.user_agent, self.browser_user_agent = user_agent, browser_user_agent
+        if not self.user_agent:
+            self.user_agent, self.browser_user_agent = generate_random_user_agent()
 
         # Атрибуты для хранения данных сессии и авторизации, полученных после логина/регистрации
-        self.cookies = {}
-        self._jwt_token: Optional[str] = None
-        self._refresh_token: Optional[str] = None
-        self._user_id: Optional[str] = None
-        self._user_context: Dict[str, Any] = {}
-        self._anymessage_email_id: Optional[str] = None
+        self.cookies = cookies or {}
+        self.jwt_token = jwt_token
+        self.refresh_token = refresh_token
+        self.user_id = user_id
+        self.user_context = user_context or {}
+        self.anymessage_email_id = anymessage_email_id
+
+    @staticmethod
+    def load_from_file(filepath: str) -> Optional['OfferUpAPI']:
+        try:
+            with open(filepath, "r", encoding='utf-8') as f:
+                file_data = json.load(f)
+                return OfferUpAPI(**file_data)
+
+        except FileNotFoundError:
+            logger.error(f"Файл по пути {filepath} не найден!")
+            return None
+        except json.decoder.JSONDecodeError:
+            logger.error(f"Файл {filepath} содержит не JSON!")
+            return None
+        except Exception as e:
+            logger.error(f"Неожиданная ошибка {e.__class__.__name__} при загрузке аккаунта из файла {filepath}: {e}")
+            return None
 
     def update_auth_tokens(self, jwt_token: str, refresh_token: str):
         """
         Обновляет токены авторизации после логина/регистрации.
         """
-        self._jwt_token = jwt_token
-        self._refresh_token = refresh_token
+        self.jwt_token = jwt_token
+        self.refresh_token = refresh_token
 
     def update_session_data(self, user_id: str):
         """
         Обновляет идентификаторы пользователя.
         """
-        self._user_id = user_id
+        self.user_id = user_id
 
     def update_user_context(self, context: Dict[str, Any]):
         """
         Обновляет словарь user_context.
         """
-        self._user_context = context
+        self.user_context = context
 
     def _get_common_headers(self) -> Dict[str, str]:
         """
@@ -105,16 +139,16 @@ class OfferUpAPI:
         """
         headers = {
             "accept": "*/*",
-            "user-agent": self._user_agent,
+            "user-agent": self.user_agent,
             "x-ou-version": OFFERUP_APP_VERSION,
             "x-ou-device-timezone": "America/New_York",
-            "x-ou-d-token": self._device_id,
+            "x-ou-d-token": self.device_id,
             "Content-Type": "application/json",
             "Host": "client-graphql.offerup.com",
             # Примеры других постоянных заголовков из запросов
             "ou-do-not-sell": "false",
-            "ou-device-advertising-id": self._advertising_id,
-            "ou-browser-user-agent": self._browser_user_agent,
+            "ou-device-advertising-id": self.advertising_id,
+            "ou-browser-user-agent": self.browser_user_agent,
         }
         return headers
 
@@ -123,8 +157,8 @@ class OfferUpAPI:
         Возвращает заголовки, требующие аутентификации (JWT токен).
         """
         headers = self._get_common_headers()
-        if self._jwt_token:
-            headers["authorization"] = f"Bearer {self._jwt_token}"
+        if self.jwt_token:
+            headers["authorization"] = f"Bearer {self.jwt_token}"
             headers["x-ou-auth-token"] = self.DUMMY_TOKEN
         return headers
 
@@ -133,7 +167,7 @@ class OfferUpAPI:
         Помогает сформировать x-ou-session-id как в примерах.
         """
         # Используем сохраненный или генерируем новый UUID
-        session_uuid = self._session_id
+        session_uuid = self.session_id
         timestamp = str(int(datetime.datetime.now().timestamp() * 1000))  # Текущее время в миллисекундах
         return f"{session_uuid}@{timestamp}"
 
@@ -179,7 +213,7 @@ class OfferUpAPI:
         headers.update({
             "x-ou-operation-name": operation_name,
             "x-ou-session-id": self._build_session_id(),
-            "x-ou-usercontext": json.dumps(self._user_context) if self._user_context else "{}",
+            "x-ou-usercontext": json.dumps(self.user_context) if self.user_context else "{}",
             "x-ou-screen": screen,
             "x-request-id": str(uuid.uuid4()),
         })
@@ -802,7 +836,7 @@ class OfferUpAPI:
             "sellerType": seller_type,
             "header": {
                 "appVersion": "2025.42.0",
-                "deviceId": self._device_id,
+                "deviceId": self.device_id,
                 "origin": "android",
                 "timestamp": current_time_iso,
                 "uniqueId": str(uuid.uuid4()),
