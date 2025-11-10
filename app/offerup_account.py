@@ -141,7 +141,7 @@ class OfferUpAccount:
 
     def is_response_errors_contain(self, response_text: Optional[dict]) -> bool:
         if not response_text:
-            return False
+            return True
 
         elif 'errors' in response_text:
             for error in response_text.get('errors', []):
