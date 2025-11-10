@@ -40,8 +40,8 @@ class MainApp:
         logger.info("База данных инициализирована.")
 
         logger.info("Создание экземпляров компонентов...")
-        self.parser = OfferUpParser(db_path=self.db_path, delay=PARSER_DELAY)
-        self.sender = MessageSender(db_path=self.db_path)
+        self.parser = OfferUpParser()
+        self.sender = MessageSender()
         self.registrar = AccountRegistrar(delay=REGISTRAR_DELAY)
 
         logger.info("Экземпляры компонентов созданы.")

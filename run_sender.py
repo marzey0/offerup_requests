@@ -2,21 +2,25 @@
 import asyncio
 import logging
 import os
+
+from app.core.database import init_db
 from app.sender import MessageSender
 from app.utils.logg import setup_logging
-from config import DATABASE_PATH, SENDER_DELAY
+from config import DATABASE_PATH
 
 # --- Настройка логирования ---
-logger_instance = setup_logging()
+logger_instance = setup_logging(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 async def main():
     """
     Точка входа для запуска только сендера.
     """
+    await init_db()
+
     logger.info("Запуск только компонента сендера...")
 
-    sender = MessageSender(db_path=DATABASE_PATH, delay=SENDER_DELAY)
+    sender = MessageSender()
     sender.running = True
 
     logger.info("Запуск задачи сендера...")
@@ -36,7 +40,7 @@ async def main():
             try:
                 await task
             except asyncio.CancelledError:
-                pass # Ожидаемое поведение при отмене
+                await sender.account_manager.finalize()
         logger.info("Сендер остановлен.")
 
 

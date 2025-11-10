@@ -1,5 +1,4 @@
 # app/core/offerup_api.py
-import json
 import logging
 import uuid
 import datetime
@@ -8,133 +7,37 @@ import random
 import string
 
 import aiohttp
-from aiohttp import ClientSession
 from aiohttp_socks import ProxyConnector
 
-from config import MAIN_PROXY, OFFERUP_APP_VERSION, OFFERUP_BUILD, DEFAULT_PASTA
+from config import MAIN_PROXY, OFFERUP_APP_VERSION, OFFERUP_BUILD
 
 logger = logging.getLogger(__name__)
 
 
-def generate_random_user_agent() -> tuple[str, str]:
-    """
-    Генерирует случайный, но реалистичный User-Agent для Android-устройства.
-    Возвращает строку User-Agent и строку ou-browser-user-agent.
-    """
-    # Исторические версии Android и Chrome
-    android_versions = [
-        "10", "11", "12", "13", "14"
-    ]
-    chrome_versions = [
-        "110.0.5481.154", "111.0.5563.116", "112.0.5615.135", "113.0.5672.164",
-        "114.0.5735.196", "115.0.5790.166", "116.0.5845.164", "117.0.5938.140",
-        "118.0.5993.111", "119.0.6045.163", "120.0.6099.144", "121.0.6167.143",
-        "122.0.6261.148", "123.0.6312.121", "124.0.6367.179", "125.0.6422.140",
-        "126.0.6478.122", "127.0.6553.150", "128.0.6613.147", "129.0.6668.150",
-        "130.0.6723.103", "131.0.6778.139", "132.0.6834.139", "133.0.6893.109",
-        "134.0.6957.109", "135.0.7022.139", "136.0.7088.109", "137.0.7154.140",
-        "138.0.7220.140", "139.0.7286.140", "140.0.7339.51"
-    ]
-    # Популярные модели устройств
-    device_models = [
-        "SM-G973F", "SM-G988B", "SM-G998B", "SM-G991B", "SM-G996B", "SM-G990E",
-        "SM-N986B", "SM-N981B", "SM-F711B", "SM-F916B", "SM-A515F", "SM-A528B",
-        "SM-A715F", "SM-A325F", "SM-A127F", "SM-A037F", "SM-A025F", "SM-A013F"
-    ]
-
-    android_version = random.choice(android_versions)
-    chrome_version = random.choice(chrome_versions)
-    device_model = random.choice(device_models)
-    build_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-
-    # Собираем User-Agent
-    ua = f"OfferUp/{OFFERUP_APP_VERSION} (build: {OFFERUP_BUILD}; samsung {device_model} {build_id}; Android {android_version}; en_US)"
-    browser_ua = f"Mozilla/5.0 (Linux; Android {android_version}; {device_model} Build/{build_id}; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/{chrome_version} Mobile Safari/537.36"
-
-    return ua, browser_ua
-
-
 class OfferUpAPI:
     BASE_URL = "https://client-graphql.offerup.com/"
-    DUMMY_TOKEN = "dummy"
 
-    def __init__(self,
-        proxy: str = MAIN_PROXY,
-        pasta: list = DEFAULT_PASTA,
-        session_id = f"{str(uuid.uuid4())}@{random.randint(1111111111111, 9999999999999)}",
-        device_id = str(uuid.uuid4()).replace("-", "")[:-16],
-        advertising_id = str(uuid.uuid4()),
-        user_agent: Optional[str] = None,
-        browser_user_agent: Optional[str] = None,
-        cookies: Optional[dict[str, str]] = None,
-        jwt_token: Optional[str] = None,
-        refresh_token: Optional[str] = None,
-        user_id: Optional[str] = None,
-        user_context: Optional[Dict[str, Any]] = None,
-        anymessage_email_id: Optional[str] = None,
-        **kwargs
-    ):
-        """
-        Инициализирует клиент OfferUpAPI.
-        Генерирует уникальные идентификаторы и User-Agent для этой сессии/аккаунта.
-        """
-        self.proxy = proxy
-        self.pasta = pasta
-        self._session: Optional[ClientSession] = None
+    def __init__(
+            self,
+            proxy: str,
+            session_id: Optional[str] = None,
+            device_id: Optional[str] = None,
+            advertising_id: Optional[str] = None,
+            user_agent: Optional[str] = None,
+            browser_user_agent: Optional[str] = None):
+
+        connector = ProxyConnector.from_url(proxy)
+        self._session = aiohttp.ClientSession(connector=connector)
 
         # Генерация уникальных данных для аккаунта/сессии
-        self.session_id = session_id
-        self.device_id = device_id
-        self.advertising_id = advertising_id
+        self.session_id = session_id or self._build_session_id()
+        self.device_id = device_id or str(uuid.uuid4()).replace("-", "")[:-16]
+        self.advertising_id = advertising_id or str(uuid.uuid4())
         self.user_agent, self.browser_user_agent = user_agent, browser_user_agent
         if not self.user_agent:
-            self.user_agent, self.browser_user_agent = generate_random_user_agent()
-
-        # Атрибуты для хранения данных сессии и авторизации, полученных после логина/регистрации
-        self.cookies = cookies or {}
-        self.jwt_token = jwt_token
-        self.refresh_token = refresh_token
-        self.user_id = user_id
-        self.user_context = user_context or {}
-        self.anymessage_email_id = anymessage_email_id
-
-
-
-    @staticmethod
-    def load_from_file(filepath: str) -> Optional['OfferUpAPI']:
-        try:
-            with open(filepath, "r", encoding='utf-8') as f:
-                file_data = json.load(f)
-                return OfferUpAPI(**file_data)
-
-        except FileNotFoundError:
-            logger.error(f"Файл по пути {filepath} не найден!")
-            return None
-        except json.decoder.JSONDecodeError:
-            logger.error(f"Файл {filepath} содержит не JSON!")
-            return None
-        except Exception as e:
-            logger.error(f"Неожиданная ошибка {e.__class__.__name__} при загрузке аккаунта из файла {filepath}: {e}")
-            return None
-
-    def update_auth_tokens(self, jwt_token: str, refresh_token: str):
-        """
-        Обновляет токены авторизации после логина/регистрации.
-        """
-        self.jwt_token = jwt_token
-        self.refresh_token = refresh_token
-
-    def update_session_data(self, user_id: str):
-        """
-        Обновляет идентификаторы пользователя.
-        """
-        self.user_id = user_id
-
-    def update_user_context(self, context: Dict[str, Any]):
-        """
-        Обновляет словарь user_context.
-        """
-        self.user_context = context
+            self.user_agent, self.browser_user_agent = self.generate_random_user_agent()
+        self.jwt_token: Optional[str] = None
+        self.refresh_token: Optional[str] = None
 
     def _get_common_headers(self) -> Dict[str, str]:
         """
@@ -162,34 +65,52 @@ class OfferUpAPI:
         headers = self._get_common_headers()
         if self.jwt_token:
             headers["authorization"] = f"Bearer {self.jwt_token}"
-            headers["x-ou-auth-token"] = self.DUMMY_TOKEN
+            headers["x-ou-auth-token"] = "dummy"
         return headers
 
-    def _build_session_id(self) -> str:
-        """
-        Помогает сформировать x-ou-session-id как в примерах.
-        """
-        # Используем сохраненный или генерируем новый UUID
-        session_uuid = self.session_id
+    @staticmethod
+    def _build_session_id() -> str:
+        session_uuid = str(uuid.uuid4())
         timestamp = str(int(datetime.datetime.now().timestamp() * 1000))  # Текущее время в миллисекундах
         return f"{session_uuid}@{timestamp}"
 
-    async def __aenter__(self):
+    @staticmethod
+    def generate_random_user_agent() -> tuple[str, str]:
         """
-        Асинхронный вход в контекстный менеджер.
-        Возвращает сам экземпляр класса.
+        Генерирует случайный, но реалистичный User-Agent для Android-устройства.
+        Возвращает строку User-Agent и строку ou-browser-user-agent.
         """
-        # Инициализация сессии с прокси
-        connector = ProxyConnector.from_url(self.proxy)
-        self._session = aiohttp.ClientSession(connector=connector)
-        return self
+        # Исторические версии Android и Chrome
+        android_versions = [
+            "10", "11", "12", "13", "14"
+        ]
+        chrome_versions = [
+            "110.0.5481.154", "111.0.5563.116", "112.0.5615.135", "113.0.5672.164",
+            "114.0.5735.196", "115.0.5790.166", "116.0.5845.164", "117.0.5938.140",
+            "118.0.5993.111", "119.0.6045.163", "120.0.6099.144", "121.0.6167.143",
+            "122.0.6261.148", "123.0.6312.121", "124.0.6367.179", "125.0.6422.140",
+            "126.0.6478.122", "127.0.6553.150", "128.0.6613.147", "129.0.6668.150",
+            "130.0.6723.103", "131.0.6778.139", "132.0.6834.139", "133.0.6893.109",
+            "134.0.6957.109", "135.0.7022.139", "136.0.7088.109", "137.0.7154.140",
+            "138.0.7220.140", "139.0.7286.140", "140.0.7339.51"
+        ]
+        # Популярные модели устройств
+        device_models = [
+            "SM-G973F", "SM-G988B", "SM-G998B", "SM-G991B", "SM-G996B", "SM-G990E",
+            "SM-N986B", "SM-N981B", "SM-F711B", "SM-F916B", "SM-A515F", "SM-A528B",
+            "SM-A715F", "SM-A325F", "SM-A127F", "SM-A037F", "SM-A025F", "SM-A013F"
+        ]
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """
-        Асинхронный выход из контекстного менеджера.
-        Закрывает aiohttp сессию.
-        """
-        await self.close()
+        android_version = random.choice(android_versions)
+        chrome_version = random.choice(chrome_versions)
+        device_model = random.choice(device_models)
+        build_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
+        # Собираем User-Agent
+        ua = f"OfferUp/{OFFERUP_APP_VERSION} (build: {OFFERUP_BUILD}; samsung {device_model} {build_id}; Android {android_version}; en_US)"
+        browser_ua = f"Mozilla/5.0 (Linux; Android {android_version}; {device_model} Build/{build_id}; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/{chrome_version} Mobile Safari/537.36"
+
+        return ua, browser_ua
 
     async def _make_request(self, operation_name: str, query: str, variables: Dict[str, Any] = None,
                             requires_auth: bool = False, screen: str = "",
@@ -212,23 +133,19 @@ class OfferUpAPI:
         """
         headers = self._get_authenticated_headers() if requires_auth else self._get_common_headers()
         headers.update(additional_headers or {})
-
         headers.update({
             "x-ou-operation-name": operation_name,
-            "x-ou-session-id": self._build_session_id(),
-            "x-ou-usercontext": json.dumps(self.user_context) if self.user_context else "{}",
+            "x-ou-session-id": self.session_id,
+            "x-ou-usercontext": "{}",
             "x-ou-screen": screen,
             "x-request-id": str(uuid.uuid4()),
         })
-        if self.cookies:
-            headers.update({
-                "Cookie": "; ".join([
-                    f"{key}={value}" for key, value in self.cookies.items()
-                ])
-            })
-
-        # Упрощенный URL, так как все запросы идут на один эндпоинт
-        url = self.BASE_URL
+        # if self.cookies:
+        #     headers.update({
+        #         "Cookie": "; ".join(
+        #             [f"{key}={value}" for key, value in self.cookies.items()]
+        #         )
+        #     })
 
         payload = {
             "operationName": operation_name,
@@ -237,80 +154,17 @@ class OfferUpAPI:
         if variables is not None:
             payload["variables"] = variables
 
-        logger.debug(f"Отправляю запрос по {url}\nЗаголовки: {headers}\nТело: {payload}")
+        # logger.debug(f"Отправляю запрос по {self.BASE_URL}\nЗаголовки: {headers}\nТело: {payload}")
 
         try:
-            # Создаем объект куки для сессии
-            async with self._session.post(url, headers=headers, json=payload) as response:
+            async with self._session.post(self.BASE_URL, headers=headers, json=payload) as response:
                 response.raise_for_status()  # Вызовет исключение для 4xx/5xx
-
-                # Обрабатываем куки из ответа
-                await self._update_cookies_from_response(response)
-
                 response_json = await response.json()
-
-                logger.debug(f"Ответ на запрос OfferUpAPI: {response_json}\nЗаголовки ответа: {response.headers}")
+                # logger.debug(f"Ответ на запрос OfferUpAPI: {response_json}\nЗаголовки ответа: {response.headers}")
                 return response_json
         except Exception as e:
-            print(f"Unexpected error during request: {e}")
+            logger.error(f"Ошибка при выполнении запроса: {e}")
             raise
-
-    async def _update_cookies_from_response(self, response: aiohttp.ClientResponse):
-        """
-        Обновляет куки из заголовков ответа.
-
-        Args:
-            response: Объект ответа aiohttp
-        """
-        if response.headers.get("Set-Cookie"):
-            # Получаем все куки из заголовков Set-Cookie
-            set_cookie_headers = response.headers.getall("Set-Cookie", [])
-
-            if not self.cookies:
-                self.cookies = {}
-
-            # Парсим каждый заголовок Set-Cookie и обновляем словарь куки
-            for cookie_header in set_cookie_headers:
-                parsed_cookies = self._parse_cookie_string(cookie_header)
-                self.cookies.update(parsed_cookies)
-
-            logger.debug(f"Обновлены куки: {self.cookies}")
-
-    def _parse_cookie_string(self, cookie_string: str) -> Dict[str, str]:
-        """
-        Парсит строку куки из заголовка Set-Cookie в словарь.
-
-        Args:
-            cookie_string: Строка куки из заголовка Set-Cookie
-
-        Returns:
-            Dict[str, str]: Словарь с парами имя=значение куки
-        """
-        cookies = {}
-
-        if not cookie_string:
-            return cookies
-
-        try:
-            # Разделяем по точкам с запятой и берем первую часть (основная пара имя=значение)
-            cookie_parts = cookie_string.split(';')
-            main_cookie = cookie_parts[0].strip()
-
-            if '=' in main_cookie:
-                name, value = main_cookie.split('=', 1)
-                cookies[name.strip()] = value.strip()
-
-            # Также обрабатываем дополнительные куки, если они есть
-            for part in cookie_parts[1:]:
-                part = part.strip()
-                if '=' in part:
-                    name, value = part.split('=', 1)
-                    cookies[name.strip()] = value.strip()
-
-        except Exception as e:
-            logger.warning(f"Ошибка при парсинге куки '{cookie_string}': {e}")
-
-        return cookies
 
     # --- API Методы ---
 
@@ -342,12 +196,16 @@ class OfferUpAPI:
                 "searchLocation": search_location
             }
         }
-        # Этот вызов не требует аутентификации
-        response = await self._make_request("GetUserContext", query, variables, requires_auth=False,
-                                            screen="OnboardingBuyerInterestSelection")
-        # Обновляем внутренний user_context из ответа
-        if response and 'data' in response and 'userContext' in response['data']:
-            self.update_user_context(response['data']['userContext'].get('userContext', {}))
+        response = await self._make_request(
+            "GetUserContext",
+            query,
+            variables,
+            requires_auth=False,
+            screen="OnboardingBuyerInterestSelection"
+        )
+
+        if response and 'data' in response and 'userContext' in response['data']:  # Обновляем внутренний user_context из ответа
+            self.user_context = response['data']['userContext'].get('userContext', {})
         return response
 
     async def signup(self, email: str, name: str, password: str, client_type: str = "Android") -> Dict[str, Any]:
@@ -421,19 +279,8 @@ class OfferUpAPI:
             "password": password,
             "clientType": client_type
         }
-        # Этот вызов не требует аутентификации
-        response = await self._make_request("Signup", query, variables, requires_auth=False,
-                                            screen="/auth-stack/signup")
-        # Извлечение токенов и ID из ответа signup
-        if response and 'data' in response and 'signup' in response['data']:
-            signup_data = response['data']['signup']
-            user_id = signup_data['id']
-            jwt_token = signup_data['sessionToken']['value']
-            refresh_token = signup_data['refreshToken']['value']
-
-            # Обновление клиента токенами и ID
-            self.update_auth_tokens(jwt_token, refresh_token)
-            self.update_session_data(str(user_id))
+        response = await self._make_request(
+            "Signup", query, variables, requires_auth=False, screen="/auth-stack/signup")
         return response
 
     async def get_auth_user(self) -> Dict[str, Any]:
@@ -543,8 +390,8 @@ class OfferUpAPI:
           }
         }
         """
-        return await self._make_request("GetUnreadAlertCount", query, requires_auth=True,
-                                        screen="/accountstack/account")
+        return await self._make_request(
+            "GetUnreadAlertCount", query, requires_auth=True, screen="/accountstack/account")
 
     async def change_email(self, user_id: int, email: str) -> Dict[str, Any]:
         """
@@ -560,10 +407,9 @@ class OfferUpAPI:
         variables = {
             "userId": user_id,
             "email": email
-            # multifactorHeaderInfo опущен, так как не был в примере
         }
-        return await self._make_request("ChangeEmail", query, variables, requires_auth=True,
-                                        screen="/verify-email-stack/verify-email")
+        return await self._make_request(
+            "ChangeEmail", query, variables, requires_auth=True, screen="/verify-email-stack/verify-email")
 
     async def confirm_email_from_token(self, user_id: str, token: str) -> Dict[str, Any]:
         """
@@ -581,10 +427,10 @@ class OfferUpAPI:
             "token": token,
             "challengeId": None  # challenge_id из URL в примере был пустым, передаём null
         }
-        return await self._make_request("ConfirmEmail", query, variables, requires_auth=True,
-                                        screen="/verify-email-stack/verify-email")
+        return await self._make_request(
+            "ConfirmEmail", query, variables, requires_auth=True, screen="/verify-email-stack/verify-email")
 
-    async def get_item_detail_data_by_listing_id(self, listing_id: str, is_logged_in: bool = True,
+    async def get_item_detail_data_by_listing_id(self, listing_id: str, is_logged_in: bool = False,
                                                  device_location: Dict[str, float] = None) -> Dict[str, Any]:
         """
         Получает детали товара по его идентификатору.
@@ -785,57 +631,8 @@ class OfferUpAPI:
             "deviceLocation": device_location
         }
         # screen зависит от контекста вызова, используем общий
-        return await self._make_request("GetItemDetailDataByListingId", query, variables, requires_auth=is_logged_in,
-                                        screen="ItemDetail")
-
-    async def item_viewed(self, item_id: str, listing_id: str, seller_id: str, origin: str, source: str,
-                          tile_type: str, user_id: str, category_id: str, tile_location: int,
-                          shipping: Dict[str, Any], posting: Dict[str, Any], vehicle: Dict[str, Any],
-                          seller_type: str) -> Dict[str, Any]:
-        """
-        Отправляет событие просмотра товара.
-        Автоматически генерирует header и mobileHeader.
-        """
-        query = """
-        mutation ItemViewed($itemId: ID!, $listingId: ID!, $sellerId: ID!, $header: ItemViewedEventHeader!, $mobileHeader: ItemViewedEventMobileHeader!, $origin: String, $source: String, $tileType: String, $userId: String, $moduleId: ID, $shipping: ShippingInput, $vehicle: VehicleInput, $posting: PostingInput, $tileLocation: Int, $categoryId: String, $moduleType: String, $sellerType: SellerType) {
-          itemViewed(
-            data: {itemId: $itemId, listingId: $listingId, sellerId: $sellerId, origin: $origin, source: $source, tileType: $tileType, userId: $userId, header: $header, mobileHeader: $mobileHeader, moduleId: $moduleId, shipping: $shipping, vehicle: $vehicle, posting: $posting, tileLocation: $tileLocation, categoryId: $categoryId, moduleType: $moduleType, sellerType: $sellerType}
-          )
-        }
-        """
-
-        # Генерация timestamp и uniqueId для header
-        current_time_iso = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
-        local_time_iso = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
-
-        variables = {
-            "itemId": item_id,
-            "listingId": listing_id,
-            "sellerId": seller_id,
-            "origin": origin,
-            "source": source,
-            "tileType": tile_type,
-            "userId": user_id,
-            "categoryId": category_id,
-            "tileLocation": tile_location,
-            "shipping": shipping,
-            "posting": posting,
-            "vehicle": vehicle,
-            "sellerType": seller_type,
-            "header": {
-                "appVersion": "2025.42.0",
-                "deviceId": self.device_id,
-                "origin": "android",
-                "timestamp": current_time_iso,
-                "uniqueId": str(uuid.uuid4()),
-                "userId": user_id,
-                "deviceLocation": posting.get("itemLocation", {})
-            },
-            "mobileHeader": {
-                "localTimestamp": local_time_iso
-            }
-        }
-        return await self._make_request("ItemViewed", query, variables, requires_auth=True, screen="ItemDetail")
+        return await self._make_request(
+            "GetItemDetailDataByListingId", query, variables, requires_auth=is_logged_in, screen="ItemDetail")
 
     async def public_profile(self, user_id: int) -> Dict[str, Any]:
         """
@@ -948,7 +745,8 @@ class OfferUpAPI:
         }
         """
         variables = {"userId": user_id}
-        return await self._make_request("PublicProfile", query, variables, requires_auth=True, screen="PublicProfile")
+        return await self._make_request(
+            "PublicProfile", query, variables, requires_auth=True, screen="PublicProfile")
 
     async def get_inbox_alerts(self, alert_type: str = "INBOX") -> Dict[str, Any]:
         """
@@ -1142,7 +940,8 @@ class OfferUpAPI:
         }
         """
         variables = {"input": {"type": alert_type}}
-        return await self._make_request("GetInboxAlerts", query, variables, requires_auth=True, screen="Inbox")
+        return await self._make_request(
+            "GetInboxAlerts", query, variables, requires_auth=True, screen="Inbox")
 
     async def get_chat_discussion(self, listing_id: str, discussion_id: str = None) -> Dict[str, Any]:
         """
@@ -1498,7 +1297,8 @@ class OfferUpAPI:
         if discussion_id:
             input_vars["discussionId"] = discussion_id
         variables = {"input": input_vars}
-        return await self._make_request("GetChatDiscussion", query, variables, requires_auth=True, screen="Discussion")
+        return await self._make_request(
+            "GetChatDiscussion", query, variables, requires_auth=True, screen="Discussion")
 
     async def post_message(self, discussion_id: str, text: str) -> Dict[str, Any]:
         """
@@ -1515,9 +1315,9 @@ class OfferUpAPI:
         variables = {
             "discussionId": discussion_id,
             "text": text
-            # photoUuids и suggestedMessageId опущены, так как не были в примере
         }
-        return await self._make_request("PostMessage", query, variables, requires_auth=True, screen="Discussion")
+        return await self._make_request(
+            "PostMessage", query, variables, requires_auth=True, screen="Discussion")
 
     async def post_first_message(self, listing_id: str, text: str) -> Dict[str, Any]:
         """
@@ -1537,7 +1337,8 @@ class OfferUpAPI:
                 "text": text
             }
         }
-        return await self._make_request("PostFirstMessage", query, variables, requires_auth=True, screen="Discussion")
+        return await self._make_request(
+            "PostFirstMessage", query, variables, requires_auth=True, screen="Discussion")
 
     async def update_read_date(self, discussion_id: str, user_id: str, last_post_date: str) -> Dict[str, Any]:
         """
@@ -1555,7 +1356,8 @@ class OfferUpAPI:
                 "lastPostDate": last_post_date
             }
         }
-        return await self._make_request("UpdateReadDate", query, variables, requires_auth=True, screen="Discussion")
+        return await self._make_request(
+            "UpdateReadDate", query, variables, requires_auth=True, screen="Discussion")
 
     async def change_phone_number(self, phone_number: str, country_code: int = 1) -> Dict[str, Any]:
         """
@@ -1573,7 +1375,8 @@ class OfferUpAPI:
             "phoneNumber": phone_number,
             "countryCode": country_code
         }
-        return await self._make_request("ChangePhoneNumber", query, variables, requires_auth=True, screen="VerifyPhone")
+        return await self._make_request(
+            "ChangePhoneNumber", query, variables, requires_auth=True, screen="VerifyPhone")
 
     async def change_phone_number_confirm(self, otp: str, reference_id: str, phone_number: str, country_code: int = 1,
                                           challenge_id: str = None) -> Dict[str, Any]:
@@ -1592,14 +1395,12 @@ class OfferUpAPI:
             "referenceId": reference_id,
             "countryCode": country_code,
             "phoneNumber": phone_number
-            # challengeId опционально
         }
         if challenge_id:
             variables["challengeId"] = challenge_id
 
-        return await self._make_request("ChangePhoneNumberConfirm", query, variables, requires_auth=True,
-                                        screen="EnterCode")
-
+        return await self._make_request(
+            "ChangePhoneNumberConfirm", query, variables, requires_auth=True, screen="EnterCode")
 
     async def get_category_taxonomy(self) -> Dict[str, Any]:
         """Получает иерархию категорий OfferUp."""
@@ -1643,23 +1444,10 @@ class OfferUpAPI:
         }
         """
         variables = {"input": {}}
-        # Этот вызов не требует аутентификации
-        # x-ou-screen не указан в оригинальном запросе
-        return await self._make_request("GetCategoryTaxonomy", query, variables, requires_auth=False, screen="")
+        return await self._make_request(
+            "GetCategoryTaxonomy", query, variables, requires_auth=False, screen="")
 
-    async def get_new_listings_in_category(
-            self,
-            category_id: str,
-            distance: int = 50,
-            latitude: float = 40.7360524,
-            longitude: float = -73.9800987,
-            zipcode: str = "90001",
-            page_cursor: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Получает новые объявления в указанной категории, отсортированные по новизне.
-        Требует аутентификации (JWT токен).
-        """
+    async def get_new_listings_in_category(self, category_id: str, page_cursor: Optional[str] = None) -> Dict[str, Any]:
         query = """
         query GetModularFeed($searchParams: [SearchParam], $debug: Boolean = false) {
           modularFeed(params: $searchParams, debug: $debug) {
@@ -2586,12 +2374,12 @@ class OfferUpAPI:
         variables = {
             "debug": False,
             "searchParams": [
-                {"key": "DISTANCE", "value": str(distance)},
                 {"key": "SORT", "value": "newest"},
                 {"key": "cid", "value": category_id},
-                # {"key": "lat", "value": str(latitude)},
-                # {"key": "lon", "value": str(longitude)},
-                # {"key": "zipcode", "value": zipcode},
+                # {"key": "DISTANCE", "value": "5000"},
+                # {"key": "lat", "value": "40.7360524"},
+                # {"key": "lon", "value": "-73.9800987"},
+                # {"key": "zipcode", "value": "10010"},
             ]
         }
 
@@ -2601,8 +2389,8 @@ class OfferUpAPI:
 
         # Этот вызов требует аутентификации
         # x-ou-screen указан как "ItemsSearchFeed"
-        return await self._make_request("GetModularFeed", query, variables, requires_auth=True,
-                                        screen="ItemsSearchFeed")
+        return await self._make_request(
+            "GetModularFeed", query, variables, requires_auth=False, screen="ItemsSearchFeed")
 
     async def close(self):
         """
@@ -2612,3 +2400,20 @@ class OfferUpAPI:
             await self._session.close()
 
 
+async def test():
+    offerup_api = OfferUpAPI(
+        proxy = MAIN_PROXY,
+    )
+    try:
+        categories_response = await offerup_api.get_category_taxonomy()
+        print(categories_response)
+        # parse_response = await offerup_api.get_new_listings_in_category(category_id="1")
+        # print(parse_response)
+    except Exception as e:
+        print(e)
+    finally:
+        await offerup_api.close()
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(test())

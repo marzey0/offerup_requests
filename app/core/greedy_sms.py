@@ -286,7 +286,7 @@ class GreedySMSClient:
             "service": service,
             "operator": operator,
             "activationType": activation_type,
-            "language": language,
+            # "language": language,
             "max": max,
             "maxPrice": max_price
         }

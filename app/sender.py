@@ -1,12 +1,8 @@
-# app/core/sender.py
+# app/sender.py
 import asyncio
 import logging
-import time
-from typing import Dict, Any, Optional
-from app.core.offerup_api import OfferUpAPI
-from app.core.database import get_unprocessed_ads, mark_ad_as_processed
+from app.core.database import get_unprocessed_ads, mark_ad_as_processed, increment_processed_counter
 from app.account_manager import AccountManager
-from config import SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT, SENDER_DELAY_BETWEEN_MESSAGES
 
 logger = logging.getLogger(__name__)
 
@@ -19,29 +15,23 @@ class MessageSender:
     Самое свежее объявление из базы данных передаётся на обработку.
     """
 
-    def __init__(self, db_path: str):
-        self.db_path = db_path
-        self.delay = 1
+    def __init__(self):
         self.running = True  # Флаг для остановки из main.py
         self.account_manager = AccountManager()
-        # Словарь для отслеживания времени последнего использования аккаунта
-        self.account_last_used: Dict[str, float] = {}
-        # Индекс для round-robin выбора аккаунта
-        self.account_index = 0
 
     async def run(self):
         """
         Основной цикл сендера.
         """
         logger.info("Запуск компонента сендера.")
+        await self.account_manager.initialize()
         while self.running:
             try:
                 logger.debug("Проверка на наличие необработанных объявлений...")
                 # Берём *одно* объявление из БД
-                ads = await get_unprocessed_ads(self.db_path, limit=1)
+                ads = await get_unprocessed_ads(limit=1)
                 if not ads:
-                    logger.debug(f"Нет необработанных объявлений (processed=1). Пауза {self.delay} секунд.")
-                    await asyncio.sleep(self.delay)
+                    await asyncio.sleep(1)
                     continue
 
                 # Берём первое (и единственное) объявление из выборки
@@ -51,105 +41,33 @@ class MessageSender:
                 logger.info(f"Найдено объявление для обработки: {ad_id} (продавец: {seller_id})")
 
                 # Выбираем аккаунт с учётом времени охлаждения
-                account_key = await self._get_available_account()
-                if not account_key:
-                    logger.warning("Нет доступных аккаунтов с учётом времени охлаждения. Пауза.")
-                    await asyncio.sleep(self.delay)
-                    continue
-
-                logger.debug(f"Используем аккаунт {account_key} для отправки сообщения по объявлению {ad_id}.")
-
-                # Получаем API клиент для выбранного аккаунта
-                api_client = self.account_manager.get_api_instance(account_key)
-                if not api_client:
-                    logger.error(f"Не удалось получить API клиент для аккаунта {account_key}.")
-                    continue
+                account = await self.account_manager.get_account()
+                logger.debug(f"Используем аккаунт {account.email} для отправки сообщения по объявлению {ad_id}.")
 
                 # Отправляем сообщение
-                success = await self._send_pasta_to_seller(api_client, ad)
+                success = await account.process_ad(ad)
                 if success:
+                    account.processed += 1
+                    await increment_processed_counter(account.email)
                     # Помечаем объявление как обработанное
-                    marked = await mark_ad_as_processed(self.db_path, ad_id)
+                    marked = await mark_ad_as_processed(ad_id)
                     if marked:
                         logger.debug(f"Объявление {ad_id} помечено как обработанное (processed=2).")
                     else:
                         logger.error(f"Не удалось пометить объявление {ad_id} как обработанное.")
-                else:
-                    logger.warning(f"Не удалось отправить сообщение по объявлению {ad_id} через аккаунт {account_key}.")
 
-                logger.info(f"Объявление {ad["id"]} отписано.")
-                # Обновляем время последнего использования аккаунта
-                self.account_last_used[account_key] = time.time()
+                if account.banned:
+                    logger.warning(f"{account.email} забанен! Отписал: {account.processed}")
+                    self.account_manager.remove_account(account.email)
+                elif account.unauthorized:
+                    logger.warning(f"{account.email} разлогинило! Отписал: {account.processed}")
+                    self.account_manager.remove_account(account.email)
+                elif account.unverified:
+                    logger.warning(f"{account.email} кинуло на вериф! Отписал: {account.processed}")
+                    self.account_manager.remove_account(account.email)
 
-                # Пауза между обработками объявлений
-                await asyncio.sleep(self.delay)
+                logger.info(f"{account.email} ({account.processed}) - Объявление {ad["ad_id"]} отписано.")
 
             except Exception as e:
                 logger.error(f"Неожиданная ошибка в цикле сендера: {e}")
-                await asyncio.sleep(self.delay) # Пауза даже при ошибке
-
-    async def _get_available_account(self) -> Optional[str]:
-        """
-        Возвращает ключ аккаунта, который доступен для использования (прошло время охлаждения).
-        Использует round-robin для перебора аккаунтов.
-        """
-        account_keys = self.account_manager.get_all_account_keys()
-        if not account_keys:
-            logger.warning("Нет загруженных аккаунтов.")
-            return None
-
-        current_time = time.time()
-        num_accounts = len(account_keys)
-
-        # Проверяем аккаунты, начиная с последнего использованного + 1 (round-robin)
-        for i in range(num_accounts):
-            idx = (self.account_index + i) % num_accounts
-            key = account_keys[idx]
-
-            last_used = self.account_last_used.get(key, 0)
-            if current_time - last_used >= SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT:
-                # Нашли подходящий аккаунт
-                self.account_index = (idx + 1) % num_accounts # Обновляем индекс для следующего раза
-                return key
-
-        # Ни один аккаунт не прошёл проверку на охлаждение
-        logger.debug("Нет доступных аккаунтов, все на cooldown.")
-        return None
-
-    async def _send_pasta_to_seller(self, api_client: OfferUpAPI, ad: Dict[str, Any]) -> bool:
-        """
-        Отправляет сообщение продавцу по указанному объявлению, используя post_first_message.
-        """
-        ad_id = ad['ad_id']
-
-        try:
-            async with api_client as ac: # Открываем сессию
-                discussion_id = None
-                for msg_num, msg_text in enumerate(ac.pasta, start=1):
-                    logger.debug(f"Отправляем {msg_num} сообщение '{msg_text[:15]}' по объявлению {ad_id}...")
-                    if msg_num == 1:
-                        post_first_message_response = await ac.post_first_message(listing_id=ad_id, text=msg_text)
-                        if not post_first_message_response or 'errors' in post_first_message_response:
-                            logger.error(f"Ошибка при отправке первого сообщения: {post_first_message_response}")
-                            return False
-                        if discussion_id := post_first_message_response.get('data', {}).get('postFirstMessage', {}).get('discussionId'):
-                            logger.info(f"Сообщение успешно отправлено, создан чат с ID: {discussion_id}.")
-                            continue
-                    else:
-                        if not discussion_id:
-                            logger.info(f"Первое сообщение не вернуло discussionId.")
-                            return False
-                        await asyncio.sleep(SENDER_DELAY_BETWEEN_MESSAGES)
-                        post_message_response = await ac.post_message(listing_id=discussion_id, text=msg_text)
-                        if not post_message_response or 'errors' in post_message_response:
-                            logger.error(f"Ответ на отправку сообщения в чат содержит ошибки: {post_message_response}")
-                            return False
-                        logger.debug(f"Сообщение {msg_num} отправлено успешно!")
-                        continue
-
-                logger.info(f"Объявление {ad_id} успешно обработано!")
-                return True
-
-        except Exception as e:
-            logger.error(f"Ошибка при отправке сообщения по объявлению {ad_id}: {e}")
-            return False
+                await asyncio.sleep(5) # Пауза при ошибке

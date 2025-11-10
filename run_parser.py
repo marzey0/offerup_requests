@@ -11,30 +11,39 @@ from config import DATABASE_PATH, PARSER_DELAY
 
 # --- Настройка логирования ---
 logger_instance = setup_logging(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
 
 async def main():
     """
     Точка входа для запуска только парсера.
     """
-    logger.info("Запуск только компонента парсера...")
+    print("ВНИМАНИЕ! ПАРСЕР СИЛЬНО ЖРЁТ ТРАФИК, ПАРСИТЬ НУЖНО АККУРАТНО!!!!!!")
+    print("ВНИМАНИЕ! ПАРСЕР СИЛЬНО ЖРЁТ ТРАФИК, ПАРСИТЬ НУЖНО АККУРАТНО!!!!!!")
+    print("ВНИМАНИЕ! ПАРСЕР СИЛЬНО ЖРЁТ ТРАФИК, ПАРСИТЬ НУЖНО АККУРАТНО!!!!!!")
+    print("ВНИМАНИЕ! ПАРСЕР СИЛЬНО ЖРЁТ ТРАФИК, ПАРСИТЬ НУЖНО АККУРАТНО!!!!!!")
+    print("ВНИМАНИЕ! ПАРСЕР СИЛЬНО ЖРЁТ ТРАФИК, ПАРСИТЬ НУЖНО АККУРАТНО!!!!!!")
+    print("ВНИМАНИЕ! ПАРСЕР СИЛЬНО ЖРЁТ ТРАФИК, ПАРСИТЬ НУЖНО АККУРАТНО!!!!!!")
+    print("ВНИМАНИЕ! ПАРСЕР СИЛЬНО ЖРЁТ ТРАФИК, ПАРСИТЬ НУЖНО АККУРАТНО!!!!!!")
+    print("ВНИМАНИЕ! ПАРСЕР СИЛЬНО ЖРЁТ ТРАФИК, ПАРСИТЬ НУЖНО АККУРАТНО!!!!!!")
+    print("ВНИМАНИЕ! ПАРСЕР СИЛЬНО ЖРЁТ ТРАФИК, ПАРСИТЬ НУЖНО АККУРАТНО!!!!!!")
+    print("ВНИМАНИЕ! ПАРСЕР СИЛЬНО ЖРЁТ ТРАФИК, ПАРСИТЬ НУЖНО АККУРАТНО!!!!!!")
+    print("ВНИМАНИЕ! ПАРСЕР СИЛЬНО ЖРЁТ ТРАФИК, ПАРСИТЬ НУЖНО АККУРАТНО!!!!!!")
 
     await init_db()
 
-    parser = OfferUpParser(db_path=DATABASE_PATH, delay=PARSER_DELAY)
+    parser = OfferUpParser()
     parser.running = True
 
-    logger.info("Запуск задачи парсера...")
+    print("Запуск задачи парсера...")
     task = asyncio.create_task(parser.run(), name="Parser")
 
     try:
         # Ждём завершения задачи, но готовы к KeyboardInterrupt
         await asyncio.gather(task, return_exceptions=True)
     except KeyboardInterrupt:
-        logger.info("Получен KeyboardInterrupt (Ctrl+C).")
+        print("Получен KeyboardInterrupt (Ctrl+C).")
     finally:
-        logger.info("Остановка парсера...")
+        print("Остановка парсера...")
         parser.running = False
         # Отменяем задачу, если она ещё работает
         if not task.done():
@@ -43,12 +52,12 @@ async def main():
                 await task
             except asyncio.CancelledError:
                 pass # Ожидаемое поведение при отмене
-        logger.info("Парсер остановлен.")
+        print("Парсер остановлен.")
 
 
 if __name__ == "__main__":
     if os.name == 'nt': # Проверяем, Windows ли это
-        logger.info("ОС Windows: запуск парсера с обработкой KeyboardInterrupt...")
+        print("ОС Windows: запуск парсера с обработкой KeyboardInterrupt...")
         try:
             asyncio.run(main())
         except KeyboardInterrupt:

@@ -28,11 +28,6 @@ REGISTRAR_DELAY = 5
 MAIN_PROXY = os.getenv("MAIN_PROXY")
 DEFAULT_PASTA = ["hi, bro"]
 
-DATABASE_PATH = "data/main.db"
-os.makedirs("data", exist_ok=True)
-ACCOUNTS_DIR = "accounts"
-os.makedirs(ACCOUNTS_DIR, exist_ok=True)
-PARSER_DELAY = 15
 
 # -- Настройки сендера
 SENDER_DELAY_BETWEEN_MESSAGES = 1
@@ -40,7 +35,30 @@ SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT = 5
 
 
 # -- Настройки парсера --
+PARSER_DELAY = 180  # Периодичность проверки в сек (НЕ СТАВЬ ДОХУЯ, ЖРЁТ ТРАФИК КАК ЕБАНУТЫЙ)
+PARSER_SEMAPHORE = 5  # Кол-во параллельных запросов
 PARSER_CATEGORIES_EXCLUDED = [  # Исключить из парсинга следующие категории:
-    "Vehicles", "Tickets", "Business equipment"
+    # "Electronics & Media",
+    # "Home & Garden",
+    # "Clothing, Shoes, & Accessories",
+    "Baby & Kids",
+    "Vehicles",
+    "Toys, Games, & Hobbies",
+    "Sports & Outdoors",
+    "Collectibles & Art",
+    "Pet supplies",
+    "Health & Beauty",
+    # "Wedding",
+    "Business equipment",
+    "Tickets",
+    "General"
 ]
 
+
+# -- Другое --
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+ACCOUNTS_DIR = os.path.join(BASE_DIR, "accounts")
+DATABASE_PATH = os.path.join(DATA_DIR, "main.db")
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(ACCOUNTS_DIR, exist_ok=True)

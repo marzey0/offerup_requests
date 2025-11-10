@@ -1,33 +1,24 @@
-# app/core/parser.py
+# app/parser.py
 import asyncio
 import logging
 from typing import Dict, Any, Optional, List
 from app.core.offerup_api import OfferUpAPI
-from app.core.database import add_ad_if_new
-from app.account_manager import AccountManager
-from config import PARSER_DELAY, PARSER_CATEGORIES_EXCLUDED
+from app.core.database import add_ad_if_new, is_ad_exists
+from config import PARSER_DELAY, PARSER_CATEGORIES_EXCLUDED, MAIN_PROXY, PARSER_SEMAPHORE, DATABASE_PATH
 
 logger = logging.getLogger(__name__)
 
 
 class OfferUpParser:
-    """
-    Компонент для парсинга новых объявлений на OfferUp.
-    Использует рандомный аккаунт из папки accounts/ для выполнения запросов.
-    Получает список всех категорий, исключает PARSER_CATEGORIES_EXCLUDED.
-    Для каждой оставшейся категории 1-го уровня парсит новые объявления.
-    Проверяет фильтры (0 продаж/0 покупок) сразу из полученных данных.
-    Сохраняет объявления в базу данных с соответствующим статусом processed.
-    """
-
-    def __init__(self, db_path: str, delay: int = PARSER_DELAY):
+    def __init__(self, db_path: str = DATABASE_PATH, delay: int = PARSER_DELAY, max_concurrent_details: int = PARSER_SEMAPHORE):
         self.db_path = db_path
         self.delay = delay
         self.running = True  # Флаг для остановки из main.py
-        self.account_manager = AccountManager() # Создаём менеджер аккаунтов
-        # self.proxy = MAIN_PROXY # Не используем, если OfferUpAPI из AccountManager инициализирована с proxy из JSON
+        self.offerup_api = OfferUpAPI(proxy=MAIN_PROXY)
+        self.max_concurrent_details = max_concurrent_details # Максимальное количество одновременных запросов на детали
+        self.details_semaphore = asyncio.Semaphore(self.max_concurrent_details)
 
-        self.offerup_api = OfferUpAPI()
+        self.categories_cashed: List[Dict[str, str]] = []
 
     async def run(self):
         """
@@ -44,128 +35,31 @@ class OfferUpParser:
                 logger.error(f"Неожиданная ошибка в цикле парсера: {e}")
                 await asyncio.sleep(self.delay) # Пауза даже при ошибке
 
-    async def _parse_new_listings(self):
-        """
-        Основная логика парсинга:
-        1. Получить аккаунт.
-        2. Получить все категории.
-        3. Отфильтровать по PARSER_CATEGORIES_EXCLUDED и уровню 1.
-        4. Для каждой категории: получить новые объявления, проверить фильтры, сохранить в БД.
-        """
-        # --- 1. Выбираем аккаунт ---
-        account_keys = self.account_manager.get_all_account_keys()
-        if not account_keys:
-            logger.warning("Нет доступных аккаунтов для парсинга. Ожидание...")
-            return
-
-        import random
-        chosen_account_key = random.choice(account_keys)
-        logger.info(f"Используем аккаунт {chosen_account_key} для парсинга.")
-
-        self.offerup_api = self.account_manager.get_api_instance(chosen_account_key)
-        if not self.offerup_api:
-            logger.error(f"Не удалось получить API клиент для аккаунта {chosen_account_key}. Пропуск итерации.")
-            return
-
-        # --- 2. Получаем все категории ---
-        logger.debug("Получение иерархии категорий...")
+    async def _get_categories(self) -> List[Dict[str, str]]:
         try:
-            async with self.offerup_api as ac:
-                taxonomy_response = await ac.get_category_taxonomy()
-                categories = taxonomy_response.get('data', {}).get('getTaxonomy', {}).get('children', [])
+            if not self.categories_cashed:
+                categories_response = await self.offerup_api.get_category_taxonomy()
+                for category in categories_response.get('data', {}).get('getTaxonomy', {}).get('children', []):
+                    if category['id'] in self.categories_cashed:
+                        continue
+                    if category['label'] in PARSER_CATEGORIES_EXCLUDED:
+                        continue
+                    self.categories_cashed.append({
+                        'id': category['id'],
+                        'label': category['label'],
+                    })
+
         except Exception as e:
-            logger.error(f"Ошибка при получении категорий: {e}")
-            return
+            logger.error(f"Произошла ошибка {e.__class__.__name__} при запросе категорий: {e}")
 
-        if not categories:
-            logger.warning("Не удалось получить список категорий. Пропуск итерации.")
-            return
-
-        # --- 3. Фильтруем категории ---
-        filtered_categories = []
-        for cat in categories:
-            label = cat.get('label')
-            level = cat.get('level')
-            cat_id = cat.get('id')
-            if level == 1 and label not in PARSER_CATEGORIES_EXCLUDED:
-                logger.debug(f"Добавляем в парсинг категорию 1-го уровня: {label} (ID: {cat_id})")
-                filtered_categories.append(cat)
-            else:
-                logger.debug(f"Пропускаем категорию: {label} (уровень: {level}, в исключениях: {label in PARSER_CATEGORIES_EXCLUDED})")
-
-        if not filtered_categories:
-            logger.warning("Нет подходящих категорий 1-го уровня для парсинга.")
-            return
-
-        # --- 4. Обрабатываем каждую отфильтрованную категорию ---
-        for category in filtered_categories:
-            cat_id = category.get('id')
-            cat_label = category.get('label')
-            if not cat_id or not cat_label:
-                logger.warning(f"Категория без ID или названия, пропущена: {category}")
-                continue
-
-            logger.debug(f"Парсинг категории: {cat_label} (ID: {cat_id})")
-
-            try:
-                # Получаем объявления для категории
-                listings_tiles = await self._fetch_listings_for_category(cat_id)
-                if not listings_tiles:
-                    logger.debug(f"Нет объявлений в категории {cat_label} (ID: {cat_id}).")
-                    continue
-
-                logger.debug(f"Получены объявления: {listings_tiles}")
-
-                # Обрабатываем каждое объявление в плитках
-                for tile in listings_tiles:
-                    # Извлекаем информацию о продавце из плитки
-                    listing_data = tile.get('listing')
-                    if not listing_data:
-                        logger.warning(f"Плитка без данных объявления, пропущена: {tile}")
-                        continue
-
-                    ad_id = listing_data.get('listingId')
-                    if not ad_id:
-                        logger.warning(f"Объявление без listingId в категории {cat_label}, пропущено: {listing_data}")
-                        continue
-
-                    async with self.offerup_api as ac:
-                        listing_details = await ac.get_item_detail_data_by_listing_id(ad_id)
-                        if not listing_details:
-                            continue
-                    logger.debug(f"Получена информация об объявлении: {listing_details}")
-
-                    # Извлекаем информацию о продавце
-                    owner_data = listing_details.get('data', {}).get('listing', {}).get('owner', {})
-                    owner_profile = owner_data.get('profile', {})
-                    if not owner_profile:
-                        logger.warning(f"Не удалось получить профиль продавца для объявления {ad_id}. Пропуск.")
-                        continue
-
-                    # Проверяем фильтры: 0 продаж и 0 покупок
-                    ratings_count = owner_profile.get('ratingSummary', {}).get("count")
-                    title = listing_data.get('title', 'Без названия')
-                    seller_id = owner_data.get('id') # Используем id из owner, а не userId из profile, если он есть
-
-                    # Сохраняем в БД. Функция сама решит, установить processed = 1 или 0
-                    added = await add_ad_if_new(
-                        db_path=self.db_path,
-                        ad_id=ad_id,
-                        title=title,
-                        seller_id=seller_id,
-                        ratings_count=ratings_count
-                    )
-                    if added:
-                        if ratings_count == 0:
-                            logger.info(f"Новое объявление {title} от продавца {seller_id} (ratings_count == 0) добавлено в БД с processed=1.")
-                        else:
-                            logger.info(f"Новое объявление {ad_id} от продавца {seller_id} (ratings_count != 0) добавлено в БД с processed=0.")
-                    else:
-                        logger.debug(f"Объявление {ad_id} уже существует в БД, обновлено.")
-
-            except Exception as e:
-                logger.error(f"Ошибка при парсинге категории {cat_label} (ID: {cat_id}): {e}")
-                continue
+        return self.categories_cashed or [
+            {'id': '1', 'label': 'category 1'},
+            {'id': '2', 'label': 'category 2'},
+            {'id': '3', 'label': 'category 3'},
+            {'id': '4', 'label': 'category 4'},
+            {'id': '6', 'label': 'category 5'},
+            {'id': '7', 'label': 'category 6'},
+        ]
 
     async def _fetch_listings_for_category(self, category_id: str) -> Optional[List[Dict[str, Any]]]:
         """
@@ -173,8 +67,7 @@ class OfferUpParser:
         Возвращает список плиток типа LISTING.
         """
         try:
-            async with self.offerup_api as ac:
-                response = await ac.get_new_listings_in_category(category_id=category_id)
+            response = await self.offerup_api.get_new_listings_in_category(category_id=category_id)
             listings_tiles = []
             modular_feed = response.get('data', {}).get('modularFeed', {})
             loose_tiles = modular_feed.get('looseTiles', [])
@@ -199,3 +92,100 @@ class OfferUpParser:
         except Exception as e:
             logger.error(f"Ошибка при получении объявлений для категории {category_id}: {e}")
             return None
+
+    async def _fetch_ad_details(self, ad_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Асинхронно получает детали объявления через семафор.
+        Проверяет, существует ли объявление в БД перед запросом.
+        Возвращает словарь с ad_id, title, seller_id, ratings_count или None.
+        """
+        async with self.details_semaphore:
+            # Проверяем, есть ли объявление в БД перед запросом деталей
+            if await is_ad_exists(ad_id):
+                logger.debug(f"Объявление {ad_id} уже существует в БД, пропуск получения деталей.")
+                return None
+
+            try:
+                listing_details = await self.offerup_api.get_item_detail_data_by_listing_id(ad_id)
+                if not listing_details:
+                    logger.warning(f"Не удалось получить детали для объявления {ad_id}.")
+                    return None
+
+                logger.debug(f"Получена информация об объявлении: {ad_id}")
+
+                listing = listing_details.get('data', {}).get('listing', {})
+
+                # Извлекаем информацию о продавце
+                owner_data = listing.get('owner', {})
+                owner_profile = owner_data.get('profile', {})
+                if not owner_profile:
+                    logger.warning(f"Не удалось получить профиль продавца для объявления {ad_id}. Пропуск.")
+                    return None
+
+                title = listing['title']
+                seller_id = owner_data['id']
+                ratings_count = owner_profile.get('ratingSummary', {}).get('count', 100)
+
+                # Сохраняем в БД. Функция сама решит, установить processed = 1 или 0
+                added = await add_ad_if_new(
+                    db_path=self.db_path,
+                    ad_id=ad_id,
+                    title=title,
+                    seller_id=seller_id,
+                    ratings_count=ratings_count
+                )
+                if added:
+                    if ratings_count == 0:
+                        logger.info(
+                            f"Новое объявление {title} от продавца {seller_id} (ratings_count == 0) добавлено в БД с processed=1.")
+                    else:
+                        logger.info(
+                            f"Новое объявление {ad_id} от продавца {seller_id} (ratings_count != 0) добавлено в БД с processed=0.")
+                else:
+                    logger.debug(f"Объявление {ad_id} уже существует в БД, обновлено.")
+            except Exception as e:
+                logger.error(f"Ошибка при получении деталей объявления {ad_id}: {e}")
+                return None
+
+    async def _parse_new_listings(self):
+        """
+        Основная логика парсинга:
+        1. Получить все категории.
+        2. Отфильтровать по PARSER_CATEGORIES_EXCLUDED и уровню 1.
+        3. Для каждой категории: получить новые объявления, проверить фильтры, сохранить в БД.
+        """
+        categories = await self._get_categories()
+
+        # --- 1. Параллельный запрос всех объявлений из всех категорий ---
+        all_listings_tasks = [self._fetch_listings_for_category(cat["id"]) for cat in categories]
+        all_listings_results = await asyncio.gather(*all_listings_tasks, return_exceptions=True)
+
+        # Собираем все объявления из всех категорий
+        all_listings = []
+        for i, result in enumerate(all_listings_results):
+            if isinstance(result, Exception):
+                logger.error(f"Ошибка при получении объявлений из категории {categories[i]['id']}: {result}")
+                continue
+            if result: # Если результат не None
+                all_listings.extend(result)
+
+        if not all_listings:
+            logger.debug("Нет новых объявлений из всех категорий.")
+            return
+
+        logger.debug(f"Получено {len(all_listings)} объявлений из всех категорий.")
+
+        # --- 2. Извлечение уникальных ad_id ---
+        unique_ad_ids = set()
+        for tile in all_listings:
+            listing_data = tile.get('listing')
+            if listing_data:
+                ad_id = listing_data.get('listingId')
+                if ad_id:
+                    unique_ad_ids.add(ad_id)
+
+        logger.debug(f"Уникальных ID объявлений для проверки: {len(unique_ad_ids)}")
+
+        # --- 3. Параллельный запрос деталей для новых объявлений через семафор ---
+        detail_tasks = [self._fetch_ad_details(ad_id) for ad_id in unique_ad_ids]
+        detailed_ads = await asyncio.gather(*detail_tasks, return_exceptions=True)
