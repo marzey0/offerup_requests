@@ -15,7 +15,7 @@ class OfferUpParser:
         self.db_path = db_path
         self.delay = delay
         self.running = True  # Флаг для остановки из main.py
-        self.offerup_api = OfferUpAPI(proxy=MAIN_PROXY)
+        self.offerup_api = OfferUpAPI(proxy=PARSER_PROXY)
         self.max_concurrent_details = max_concurrent_details # Максимальное количество одновременных запросов на детали
         self.details_semaphore = asyncio.Semaphore(self.max_concurrent_details)
 

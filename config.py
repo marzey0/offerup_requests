@@ -44,6 +44,7 @@ SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT = 60
 
 
 # -- Настройки парсера --
+PARSER_PROXY = "socks5://ljxnqfnidl:sEo88fgkEA@74.235.252.63:50127"
 MAX_AD_AGE = 120  # минут
 PARSER_DELAY = 180  # Периодичность проверки в сек (НЕ СТАВЬ ДОХУЯ, ЖРЁТ ТРАФИК КАК ЕБАНУТЫЙ)
 PARSER_SEMAPHORE = 5  # Кол-во параллельных запросов
