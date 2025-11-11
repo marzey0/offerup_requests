@@ -22,6 +22,7 @@ ANYMESSAGE_EMAIL_SITE = "offerup.com"
 
 
 # -- Настройки регистрации --
+DEFAULT_ACCOUNT_NAME = "тётя мотя"  # или "random"
 DEFAULT_PASTA = ["hi, bro"]
 VERIFY_EMAIL = True
 VERIFY_PHONE = False

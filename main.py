@@ -10,7 +10,7 @@ from app.parser import OfferUpParser
 from app.sender import MessageSender
 from app.registrar import AccountRegistrar
 from app.utils.logg import setup_logging
-from config import DATABASE_PATH, PARSER_DELAY, SENDER_DELAY, REGISTRAR_DELAY
+from config import DATABASE_PATH, REGISTRAR_DELAY
 
 # --- Настройка логирования ---
 logger_instance = setup_logging()

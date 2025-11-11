@@ -19,7 +19,7 @@ from config import (
     GREEDY_OPERATOR_NAME,
     GREEDY_MAX_PRICE,
     ANYMESSAGE_EMAIL_SITE,
-    ANYMESSAGE_EMAIL_DOMAIN, VERIFY_EMAIL, VERIFY_PHONE
+    ANYMESSAGE_EMAIL_DOMAIN, VERIFY_EMAIL, VERIFY_PHONE, DEFAULT_ACCOUNT_NAME
 )
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class AccountRegistrar:
         self.account = OfferUpAccount(
             email=ordered_email,
             password=self._generate_random_password(),
-            name=self.faker.user_name(),
+            name=self.faker.user_name() if "random" in DEFAULT_ACCOUNT_NAME.lower() else DEFAULT_ACCOUNT_NAME,
             proxy=MAIN_PROXY,
             pasta=DEFAULT_PASTA
         )
