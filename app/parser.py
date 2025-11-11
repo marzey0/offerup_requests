@@ -4,7 +4,7 @@ import datetime
 import logging
 from typing import Dict, Any, Optional, List
 from app.core.offerup_api import OfferUpAPI
-from app.core.database import add_ad_if_new, is_ad_exists
+from app.core.database import ad_exists, add_ad
 from config import PARSER_DELAY, PARSER_CATEGORIES_EXCLUDED, MAIN_PROXY, PARSER_SEMAPHORE, DATABASE_PATH, MAX_AD_AGE
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ class OfferUpParser:
         """
         async with self.details_semaphore:
             # Проверяем, есть ли объявление в БД перед запросом деталей
-            if await is_ad_exists(ad_id):
+            if await ad_exists(ad_id):
                 logger.debug(f"Объявление {ad_id} уже существует в БД, пропуск получения деталей.")
                 return None
 
@@ -126,46 +126,18 @@ class OfferUpParser:
                 title = listing['title']
                 seller_id = owner_data['id']
                 ratings_count = owner_profile.get('ratingSummary', {}).get('count', 100)
+                post_date_str = listing['postDate']
 
-                # Проверяем дату публикации
-                post_date_str = listing.get('postDate')
-                processed_status = 0  # По умолчанию processed=0
+                try:
+                    post_date = datetime.datetime.fromisoformat(post_date_str.replace('Z', '+00:00'))
+                    current_time = datetime.datetime.now(datetime.UTC)
+                    time_diff = current_time - post_date
+                    logger.debug(f"Объявление {ad_id} опубликовано {time_diff.total_seconds() // 60} минут назад")
+                except (ValueError, AttributeError) as e:
+                    logger.warning(f"Ошибка при парсинге даты публикации {post_date_str}: {e}.")
 
-                if post_date_str:
-                    try:
-                        # Парсим дату из строки (формат: '2025-11-10T17:27:37.453Z')
-                        post_date = datetime.datetime.fromisoformat(post_date_str.replace('Z', '+00:00'))
-                        current_time = datetime.datetime.now(datetime.UTC)
+                await add_ad(ad_id, title, seller_id, ratings_count, post_date_str)
 
-                        # Проверяем, опубликовано ли менее 10 минут назад
-                        time_diff = current_time - post_date
-                        if time_diff.total_seconds() < MAX_AD_AGE * 60:
-                            processed_status = 1
-                        logger.debug(f"Объявление {ad_id} опубликовано {time_diff.total_seconds() // 60} минут назад")
-
-                    except (ValueError, AttributeError) as e:
-                        logger.warning(f"Ошибка при парсинге даты публикации {post_date_str}: {e}. Используется processed=0")
-                else:
-                    logger.warning(f"Не найдена дата публикации для объявления {ad_id}. Используется processed=0")
-
-                # Сохраняем в БД с учетом processed_status
-                added = await add_ad_if_new(
-                    db_path=self.db_path,
-                    ad_id=ad_id,
-                    title=title,
-                    seller_id=seller_id,
-                    ratings_count=ratings_count,
-                    processed_status=processed_status  # Передаем вычисленный статус
-                )
-                if added:
-                    if ratings_count == 0:
-                        logger.info(
-                            f"Новое объявление {title} от продавца {seller_id} (ratings_count == 0) добавлено в БД с processed=1.")
-                    else:
-                        logger.info(
-                            f"Новое объявление {ad_id} от продавца {seller_id} (ratings_count != 0) добавлено в БД с processed=0.")
-                else:
-                    logger.debug(f"Объявление {ad_id} уже существует в БД, обновлено.")
             except Exception as e:
                 logger.error(f"Ошибка при получении деталей объявления {ad_id}: {e}")
                 return None

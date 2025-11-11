@@ -28,7 +28,7 @@ def setup_logging(level=logging.INFO):
 
     # --- Обработчик для консоли ---
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.DEBUG)
+    console_handler.setLevel(level)
     console_handler.setFormatter(formatter)
 
     # --- Добавляем обработчики ---

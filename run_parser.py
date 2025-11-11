@@ -9,7 +9,7 @@ from app.utils.logg import setup_logging
 
 
 # --- Настройка логирования ---
-logger_instance = setup_logging(level=logging.INFO)
+logger_instance = setup_logging(level=logging.DEBUG)
 
 
 async def main():

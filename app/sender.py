@@ -1,7 +1,7 @@
 # app/sender.py
 import asyncio
 import logging
-from app.core.database import get_unprocessed_ads, mark_ad_as_processed, increment_processed_counter
+from app.core.database import get_next_unprocessed_ad, increment_processed_counter, update_ad_processed_status
 from app.account_manager import AccountManager
 
 logger = logging.getLogger(__name__)
@@ -27,15 +27,12 @@ class MessageSender:
         await self.account_manager.initialize()
         while self.running:
             try:
-                logger.debug("Проверка на наличие необработанных объявлений...")
-                # Берём *одно* объявление из БД
-                ads = await get_unprocessed_ads(limit=1)
-                if not ads:
+                ad = await get_next_unprocessed_ad()
+                if ad is None:
                     await asyncio.sleep(1)
                     continue
 
                 # Берём первое (и единственное) объявление из выборки
-                ad = ads[0]
                 ad_id = ad['ad_id']
                 seller_id = ad['seller_id']
                 logger.info(f"Найдено объявление для обработки: {ad_id} (продавец: {seller_id})")
@@ -47,12 +44,9 @@ class MessageSender:
                 success = await account.process_ad(ad)
                 if success:
                     account.processed = await increment_processed_counter(account.email)
-                    # Помечаем объявление как обработанное
-                    marked = await mark_ad_as_processed(ad_id)
-                    if marked:
-                        logger.debug(f"Объявление {ad_id} помечено как обработанное (processed=2).")
-                    else:
-                        logger.error(f"Не удалось пометить объявление {ad_id} как обработанное.")
+                    logger.info(f"{account.email} ({account.processed}) - Объявление {ad["ad_id"]} отписано.")
+                else:
+                    await update_ad_processed_status(ad_id, 0)
 
                 if account.banned:
                     logger.warning(f"{account.email} забанен! Отписал: {account.processed}")
@@ -67,7 +61,6 @@ class MessageSender:
                     self.account_manager.remove_account(account.email)
                     continue
 
-                logger.info(f"{account.email} ({account.processed}) - Объявление {ad["ad_id"]} отписано.")
                 asyncio.create_task(self.account_manager.return_account_to_queue(account))
 
             except Exception as e:

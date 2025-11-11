@@ -2,31 +2,29 @@
 import aiosqlite
 import logging
 from typing import Dict, Any, List, Optional
-from config import DATABASE_PATH
+from datetime import datetime, timedelta, UTC
+
+from config import DATABASE_PATH, MAX_AD_AGE
 
 logger = logging.getLogger(__name__)
 
 
-async def init_db(db_path: str = DATABASE_PATH):
+async def init_db():
     """
     Инициализирует базу данных, создавая таблицы ads и stat, если они не существуют.
     """
-    logger.info(f"Инициализация базы данных: {db_path}")
-    async with aiosqlite.connect(db_path) as db:
+    logger.info(f"Инициализация базы данных: {DATABASE_PATH}")
+    async with aiosqlite.connect(DATABASE_PATH) as db:
         # Создаём таблицу ads, если она не существует
         await db.execute('''
             CREATE TABLE IF NOT EXISTS ads (
                 ad_id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
                 seller_id TEXT NOT NULL,
-                ratings_count INTEGER DEFAULT 0,
-                processed INTEGER DEFAULT 0, -- 0: не требует, 1: требует, 2: обработано
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                ratings_count INTEGER NOT NULL,
+                processed INTEGER DEFAULT 0, -- 0: не отписан, 1: отписан
+                post_date TEXT
             );
-        ''')
-        # Индекс для ускорения поиска по статусу processed
-        await db.execute('''
-            CREATE INDEX IF NOT EXISTS idx_ads_processed ON ads (processed);
         ''')
         # Индекс для ускорения поиска по seller_id
         await db.execute('''
@@ -45,79 +43,152 @@ async def init_db(db_path: str = DATABASE_PATH):
         logger.info("База данных инициализирована.")
 
 
-async def add_ad_if_new(ad_id: str, title: str, seller_id: str, ratings_count: int,
-                        processed_status: Optional[int] = None, db_path: str = DATABASE_PATH) -> bool:
+async def add_ad(ad_id: str, title: str, seller_id: str, ratings_count: int, post_date: str) -> bool:
     """
-    Добавляет объявление в базу данных, если его ещё нет.
-    Возвращает True, если объявление было добавлено как новое.
-    Объявление не требует обработки (processed = 0), если seller_id уже существует в БД.
+    Добавляет объявление в базу данных.
+
+    Args:
+        ad_data: Словарь с данными объявления
+
+    Returns:
+        bool: True если объявление добавлено, False если уже существует
     """
-    logger.debug(f"Проверка объявления {ad_id} на наличие в БД.")
-    async with aiosqlite.connect(db_path) as db:
-        # Проверяем, существует ли другой продавец с таким seller_id
-        cursor = await db.execute("SELECT 1 FROM ads WHERE seller_id = ? AND ad_id != ?", (seller_id, ad_id))
-        seller_exists = await cursor.fetchone()
-        if seller_exists:
-            logger.debug(f"Объявление {ad_id} от продавца {seller_id}, чьи объявления уже обрабатываются. Установлен processed = 0.")
-            processed_status = 0  # Не требует обработки
-        else:
-            if processed_status is None:
-                # Проверяем, подходит ли объявление под критерии (0 отзывов) и продавец новый
-                if ratings_count == 0:
-                    processed_status = 1  # Требует обработки
-                else:
-                    processed_status = 0  # Не требует обработки
-
-        await db.execute('''
-            INSERT INTO ads (ad_id, title, seller_id, ratings_count, processed)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (ad_id, title, seller_id, ratings_count, processed_status))
-        await db.commit()
-        logger.debug(f"Объявление {ad_id} добавлено в БД с processed = {processed_status}.")
-        return True
-
-
-async def get_unprocessed_ads(limit: int = 10, db_path: str = DATABASE_PATH) -> List[Dict[str, Any]]:
-    """
-    Возвращает список объявлений, которые требуют обработки (processed = 1).
-    Ограничивает количество возвращаемых записей.
-    """
-    logger.debug(f"Поиск необработанных объявлений (processed = 1), лимит: {limit}.")
-    async with aiosqlite.connect(db_path) as db:
-        cursor = await db.execute('''
-            SELECT ad_id, title, seller_id FROM ads WHERE processed = 1 LIMIT ?
-        ''', (limit,))
-        rows = await cursor.fetchall()
-        ads = [{"ad_id": row[0], "title": row[1], "seller_id": row[2]} for row in rows]
-        logger.debug(f"Найдено {len(ads)} необработанных объявлений.")
-        return ads
-
-
-async def mark_ad_as_processed(ad_id: str, db_path: str = DATABASE_PATH) -> bool:
-    """
-    Помечает объявление как обработанное (processed = 2).
-    Возвращает True, если обновление прошло успешно.
-    """
-    logger.debug(f"Пометка объявления {ad_id} как обработанного (processed = 2).")
-    async with aiosqlite.connect(db_path) as db:
-        cursor = await db.execute('''
-            UPDATE ads SET processed = 2 WHERE ad_id = ?
-        ''', (ad_id,))
-        if cursor.rowcount == 0:
-            logger.warning(f"Объявление {ad_id} не найдено в БД для обновления статуса.")
-            return False
-        await db.commit()
-        return True
-
-
-async def is_ad_exists(ad_id: str, db_path: str = DATABASE_PATH) -> bool:
     try:
-        async with aiosqlite.connect(db_path) as db:
-            cursor = await db.execute("SELECT 1 FROM ads WHERE ad_id = ?", (ad_id,))
-            exists = await cursor.fetchone()
-            return exists is not None
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            await db.execute('''
+                INSERT OR IGNORE INTO ads (ad_id, title, seller_id, ratings_count, post_date)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (ad_id, title, seller_id, ratings_count, post_date))
+            await db.commit()
+
+            # Проверяем, была ли вставка (изменено ли количество строк)
+            if db.total_changes > 0:
+                logger.debug(f"Добавлено объявление: {ad_id}")
+                return True
+            else:
+                logger.debug(f"Объявление уже существует: {ad_id}")
+                return False
+
     except Exception as e:
-        logger.error(f"Ошибка {e.__class__.__name__} при проверке объявления {ad_id} в базе: {e}")
+        logger.error(f"Ошибка при добавлении объявления {ad_id}: {e}")
+        return False
+
+
+async def get_next_unprocessed_ad(max_age_minutes: int = MAX_AD_AGE) -> Optional[Dict[str, Any]]:
+    """
+    Получает следующее необработанное объявление, помечая его как обработанное.
+    Каждый продавец может быть обработан только единожды.
+
+    Args:
+        max_age_minutes: Максимальный возраст объявления в минутах
+
+    Returns:
+        Optional[Dict]: Данные объявления или None если подходящих нет
+    """
+    try:
+        # Вычисляем минимальную дату для фильтрации по возрасту
+        min_date = datetime.now(UTC) - timedelta(minutes=max_age_minutes)
+        # Конвертируем в тот же формат, что и в базе
+        min_date_str = min_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')[:-3] + 'Z'
+
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            # Начинаем транзакцию
+            await db.execute("BEGIN TRANSACTION")
+
+            # Ищем подходящее объявление (строковое сравнение работает для ISO формата)
+            cursor = await db.execute('''
+                SELECT ad_id, title, seller_id, ratings_count, post_date
+                FROM ads 
+                WHERE processed = 0 
+                AND post_date >= ?
+                AND seller_id NOT IN (
+                    SELECT DISTINCT seller_id 
+                    FROM ads 
+                    WHERE processed = 1
+                )
+                ORDER BY post_date DESC
+                LIMIT 1
+            ''', (min_date_str,))
+
+            result = await cursor.fetchone()
+
+            if result:
+                # Помечаем найденное объявление как обработанное
+                await db.execute('''UPDATE ads SET processed = 1 WHERE ad_id = ?''', (result[0],))
+                await db.commit()
+
+                ad_data = {
+                    'ad_id': result[0],
+                    'title': result[1],
+                    'seller_id': result[2],
+                    'ratings_count': result[3],
+                    'post_date': result[4]  # Возвращаем в оригинальном формате
+                }
+
+                return ad_data
+            else:
+                await db.commit()
+                logger.debug("Необработанные объявления не найдены")
+                return None
+
+    except Exception as e:
+        logger.error(f"Ошибка при поиске необработанного объявления: {e}")
+        return None
+
+
+async def update_ad_processed_status(ad_id: str, processed: int) -> bool:
+    """
+    Изменяет статус processed у объявления.
+
+    Args:
+        ad_id: ID объявления
+        processed: Новый статус (0 - не обработан, 1 - обработан)
+
+    Returns:
+        bool: True если обновление успешно, False если ошибка
+    """
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            await db.execute('''
+                UPDATE ads 
+                SET processed = ? 
+                WHERE ad_id = ?
+            ''', (processed, ad_id))
+            await db.commit()
+
+            if db.total_changes > 0:
+                logger.info(f"Обновлен статус объявления {ad_id} на {processed}")
+                return True
+            else:
+                logger.warning(f"Объявление {ad_id} не найдено для обновления")
+                return False
+
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении статуса объявления {ad_id}: {e}")
+        return False
+
+
+async def ad_exists(ad_id: str) -> bool:
+    """
+    Проверяет, существует ли объявление в базе данных.
+
+    Args:
+        ad_id: ID объявления для проверки
+
+    Returns:
+        bool: True если объявление существует, False если нет
+    """
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute('''
+                SELECT 1 FROM ads WHERE ad_id = ?
+            ''', (ad_id,))
+
+            result = await cursor.fetchone()
+            return result is not None
+
+    except Exception as e:
+        logger.error(f"Ошибка при проверке существования объявления {ad_id}: {e}")
         return False
 
 
@@ -151,6 +222,30 @@ async def increment_processed_counter(account_email: str, db_path: str = DATABAS
 
         await db.commit()
         return new_count
+
+
+async def get_seller_processed_status(seller_id: str) -> bool:
+    """
+    Проверяет, был ли уже обработан продавец.
+
+    Args:
+        seller_id: ID продавца
+
+    Returns:
+        bool: True если продавец уже был обработан, False если нет
+    """
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute('''
+                SELECT 1 FROM ads WHERE seller_id = ? AND processed = 1 LIMIT 1
+            ''', (seller_id,))
+
+            result = await cursor.fetchone()
+            return result is not None
+
+    except Exception as e:
+        logger.error(f"Ошибка при проверке статуса продавца {seller_id}: {e}")
+        return False
 
 
 async def get_processed_count(account_email: str, db_path: str = DATABASE_PATH) -> int:

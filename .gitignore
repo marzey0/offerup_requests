@@ -1,6 +1,6 @@
 
 accounts/
-data/
+*.log
 
 # дефолтные:
 __pycache__/

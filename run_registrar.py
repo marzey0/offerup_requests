@@ -7,7 +7,7 @@ from app.utils.logg import setup_logging
 from config import REGISTRAR_DELAY
 
 # --- Настройка логирования ---
-logger_instance = setup_logging()
+logger_instance = setup_logging(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 

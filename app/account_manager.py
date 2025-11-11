@@ -2,7 +2,7 @@
 import logging
 import os
 import asyncio
-from typing import Dict, Optional, List, Tuple, Any
+from typing import Dict, Optional, List
 from asyncio import Queue
 
 from faker.generator import random
