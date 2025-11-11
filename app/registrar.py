@@ -19,7 +19,7 @@ from config import (
     GREEDY_OPERATOR_NAME,
     GREEDY_MAX_PRICE,
     ANYMESSAGE_EMAIL_SITE,
-    ANYMESSAGE_EMAIL_DOMAIN
+    ANYMESSAGE_EMAIL_DOMAIN, VERIFY_EMAIL, VERIFY_PHONE
 )
 
 logger = logging.getLogger(__name__)
@@ -44,18 +44,24 @@ class AccountRegistrar:
         Основной цикл регистратора. Бесконечно пытается зарегистрировать аккаунты.
         """
         logger.info("Запуск компонента регистратора.")
-        while self.running:
-            try:
-                logger.debug("Попытка регистрации нового аккаунта...")
-                success = await self._register_single_account()
-                if success:
-                    logger.info("Аккаунт успешно зарегистрирован, верифицирован и сохранён.")
-                else:
-                    logger.warning("Не удалось зарегистрировать аккаунт, повтор через задержку.")
-                await asyncio.sleep(self.delay)
-            except Exception as e:
-                logger.error(f"Неожиданная ошибка в цикле регистратора: {e}")
-                await asyncio.sleep(self.delay) # Пауза даже при ошибке
+        try:
+            while self.running:
+                try:
+                    logger.debug("Попытка регистрации нового аккаунта...")
+                    success = await self._register_single_account()
+                    if success:
+                        logger.info("Аккаунт успешно зарегистрирован, верифицирован и сохранён.")
+                    else:
+                        logger.warning("Не удалось зарегистрировать аккаунт, повтор через задержку.")
+                    await asyncio.sleep(self.delay)
+                except Exception as e:
+                    logger.error(f"Неожиданная ошибка в цикле регистратора: {e}")
+                    await asyncio.sleep(self.delay) # Пауза даже при ошибке
+        except asyncio.CancelledError:
+            if self.account:
+                await self.account.api.close()
+            await self.anymessage_client.close()
+            await self.greedy_sms.close()
 
     async def _register_single_account(self) -> bool:
         """
@@ -83,18 +89,22 @@ class AccountRegistrar:
         await self.account.api.change_email(self.account.user_id, self.account.email)
 
         # --- Верификация Email (ожидание письма и подтверждение) ---
-        email_verified = await self._wait_for_verification_email_and_confirm(email_id)
-        if not email_verified:
-            logger.error(f"Не удалось верифицировать email для {ordered_email}.")
-            return False
+        if VERIFY_EMAIL:
+            email_verified = await self._wait_for_verification_email_and_confirm(email_id)
+            if not email_verified:
+                logger.error(f"Не удалось верифицировать email для {ordered_email}.")
+                return False
 
         # --- Верификация Телефона ---
-        phone_verified = await self._verify_phone_with_greedy_sms()
-        if not phone_verified:
-            logger.warning(f"Не удалось верифицировать телефон для {ordered_email}.")
+        if VERIFY_PHONE:
+            phone_verified = await self._verify_phone_with_greedy_sms()
+            if not phone_verified:
+                logger.warning(f"Не удалось верифицировать телефон для {ordered_email}.")
 
         self.account.save_to_file()
         logger.info(f"Зарегистрирован новый аккаунт: {ordered_email}")
+        await self.account.api.close()
+        self.account = None
         return True
 
     @staticmethod

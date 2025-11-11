@@ -119,7 +119,7 @@ async def is_ad_exists(ad_id: str, db_path: str = DATABASE_PATH) -> bool:
         return False
 
 
-async def increment_processed_counter(account_email: str, db_path: str = DATABASE_PATH) -> bool:
+async def increment_processed_counter(account_email: str, db_path: str = DATABASE_PATH) -> int:
     """
     Увеличивает счётчик processed для указанного аккаунта.
     Создаёт запись для аккаунта, если её не существует.
@@ -137,6 +137,7 @@ async def increment_processed_counter(account_email: str, db_path: str = DATABAS
                 VALUES (?, 1)
             ''', (account_email,))
             logger.debug(f"Создана новая запись для аккаунта {account_email} с processed = 1.")
+            new_count = 1
         else:
             # Если запись есть, увеличиваем счётчик
             current_count = row[0]
@@ -147,7 +148,7 @@ async def increment_processed_counter(account_email: str, db_path: str = DATABAS
             logger.debug(f"Обновлён счётчик processed для аккаунта {account_email}: {current_count} -> {new_count}.")
 
         await db.commit()
-        return True
+        return new_count
 
 
 async def get_processed_count(account_email: str, db_path: str = DATABASE_PATH) -> int:

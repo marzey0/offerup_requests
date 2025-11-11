@@ -266,6 +266,10 @@ class AnyMessageClient:
         params = {"id": email_id}
         return await self._make_request("GET", "/email/cancel", params)
 
+    async def close(self):
+        if self._session and not self._session.closed:
+            await self._session.close()
+
 
 # --- Пример использования ---
 # async def main():

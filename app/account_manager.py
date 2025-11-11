@@ -122,20 +122,23 @@ class AccountManager:
             logger.debug(f"Аккаунт {key} предоставлен для использования.")
             return account
 
-    async def return_account_to_queue(self, key: str):
+    async def return_account_to_queue(self, account: OfferUpAccount):
         """
         Возвращает аккаунт в очередь после использования.
         Ожидает время охлаждения перед возвратом.
         """
-        account = self.accounts.get(key)
-        if not account:
-            logger.warning(f"Попытка вернуть несуществующий аккаунт {key} в очередь.")
-            return
+        key = account.email
 
-        if account.cooldown > 0:
-            cooldown = random.uniform(account.cooldown*0.9, account.cooldown*1.1)
-            logger.debug(f"Ожидание охлаждения аккаунта {key} ({cooldown:.2f} сек).")
-            await asyncio.sleep(cooldown)
+        if account.limit_reached:  # перегрелся
+            logger.warning(f"Аккаунт {key} перегрелся! Дало лимит на спам, остужаю 2 минуты")
+            account.cooldown = max(account.cooldown*1.5, 60)  # Увеличиваем кулдаун, минимум минута
+            account.limit_reached = False
+            cooldown = 120
+        else:
+            cooldown = random.uniform(account.cooldown * 0.9, account.cooldown * 1.1)
+
+        logger.debug(f"Ожидание охлаждения аккаунта {key} ({cooldown:.2f} сек).")
+        await asyncio.sleep(cooldown)
 
         # Возвращаем ключ в очередь
         await self.available_accounts_queue.put(key)

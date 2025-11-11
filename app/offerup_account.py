@@ -49,6 +49,7 @@ class OfferUpAccount:
         self.banned = False
         self.unauthorized = False
         self.unverified = False
+        self.limit_reached = False
         self.processed = 0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -145,18 +146,23 @@ class OfferUpAccount:
 
         elif 'errors' in response_text:
             for error in response_text.get('errors', []):
+                if not error:
+                    continue
                 if error.get("title") == "Verification Required":
                     self.banned = True
-                    return True
-                elif error.get("message") == "Request failed with status code 401":
-                    self.unauthorized = True
                     return True
                 elif error.get("message") == "Request failed with status code 400":
                     error_title = error.get("extensions", {}).get("exception", {}).get("originalError", {}).get("error", {}).get("title")
                     if error_title and error_title == "Verification Required":
                         self.unverified = True
+                        return True
+                elif error.get("message") == "Request failed with status code 401":
+                    self.unauthorized = True
+                    return True
+                elif error.get("message") == "Request failed with status code 429":
+                    self.limit_reached = True
+                    return True
         return False
-
 
     async def process_ad(self, ad: dict) -> bool:
         ad_id = ad["ad_id"]
@@ -171,9 +177,11 @@ class OfferUpAccount:
                         logger.error(f"Ошибка при отправке первого сообщения: {post_first_message_response}")
                         return False
 
-                    if discussion_id := post_first_message_response.get('data', {}).get('postFirstMessage', {}).get('discussionId'):
-                        logger.info(f"Сообщение успешно отправлено, создан чат с ID: {discussion_id}.")
-                        continue
+                    if post_first_message_response:
+                        if post_first_message := post_first_message_response.get('data', {}).get('postFirstMessage', {}):
+                            if discussion_id := post_first_message.get('discussionId'):
+                                logger.info(f"Сообщение успешно отправлено, создан чат с ID: {discussion_id}.")
+                                continue
 
                 else:
                     if not discussion_id:

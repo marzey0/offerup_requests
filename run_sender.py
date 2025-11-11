@@ -40,7 +40,8 @@ async def main():
             try:
                 await task
             except asyncio.CancelledError:
-                await sender.account_manager.finalize()
+                pass
+        await sender.account_manager.finalize()
         logger.info("Сендер остановлен.")
 
 

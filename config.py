@@ -22,11 +22,13 @@ ANYMESSAGE_EMAIL_SITE = "offerup.com"
 
 
 # -- Настройки регистрации --
+DEFAULT_PASTA = ["hi, bro"]
+VERIFY_EMAIL = True
+VERIFY_PHONE = False
+MAIN_PROXY = os.getenv("MAIN_PROXY")
 OFFERUP_APP_VERSION = "2025.42.0"
 OFFERUP_BUILD = "2025420004"
 REGISTRAR_DELAY = 5
-MAIN_PROXY = os.getenv("MAIN_PROXY")
-DEFAULT_PASTA = ["hi, bro"]
 
 
 # -- Настройки сендера

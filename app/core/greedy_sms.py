@@ -292,6 +292,9 @@ class GreedySMSClient:
         }
         return await self._make_request("POST", "/activations/getNumber", data)
 
+    async def close(self):
+        if self._session and not self._session.closed:
+            await self._session.close()
 
 # --- Пример использования ---
 # async def main():

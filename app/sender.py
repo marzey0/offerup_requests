@@ -40,15 +40,13 @@ class MessageSender:
                 seller_id = ad['seller_id']
                 logger.info(f"Найдено объявление для обработки: {ad_id} (продавец: {seller_id})")
 
-                # Выбираем аккаунт с учётом времени охлаждения
                 account = await self.account_manager.get_account()
                 logger.debug(f"Используем аккаунт {account.email} для отправки сообщения по объявлению {ad_id}.")
 
                 # Отправляем сообщение
                 success = await account.process_ad(ad)
                 if success:
-                    account.processed += 1
-                    await increment_processed_counter(account.email)
+                    account.processed = await increment_processed_counter(account.email)
                     # Помечаем объявление как обработанное
                     marked = await mark_ad_as_processed(ad_id)
                     if marked:
@@ -59,14 +57,18 @@ class MessageSender:
                 if account.banned:
                     logger.warning(f"{account.email} забанен! Отписал: {account.processed}")
                     self.account_manager.remove_account(account.email)
+                    continue
                 elif account.unauthorized:
                     logger.warning(f"{account.email} разлогинило! Отписал: {account.processed}")
                     self.account_manager.remove_account(account.email)
+                    continue
                 elif account.unverified:
                     logger.warning(f"{account.email} кинуло на вериф! Отписал: {account.processed}")
                     self.account_manager.remove_account(account.email)
+                    continue
 
                 logger.info(f"{account.email} ({account.processed}) - Объявление {ad["ad_id"]} отписано.")
+                asyncio.create_task(self.account_manager.return_account_to_queue(account))
 
             except Exception as e:
                 logger.error(f"Неожиданная ошибка в цикле сендера: {e}")
