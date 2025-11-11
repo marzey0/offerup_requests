@@ -57,7 +57,7 @@ class AccountRegistrar:
                 except Exception as e:
                     logger.error(f"Неожиданная ошибка в цикле регистратора: {e}")
                     await asyncio.sleep(self.delay) # Пауза даже при ошибке
-        except asyncio.CancelledError:
+        finally:
             if self.account:
                 await self.account.api.close()
             await self.anymessage_client.close()

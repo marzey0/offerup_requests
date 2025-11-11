@@ -38,6 +38,7 @@ SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT = 5
 
 
 # -- Настройки парсера --
+MAX_AD_AGE = 120  # минут
 PARSER_DELAY = 180  # Периодичность проверки в сек (НЕ СТАВЬ ДОХУЯ, ЖРЁТ ТРАФИК КАК ЕБАНУТЫЙ)
 PARSER_SEMAPHORE = 5  # Кол-во параллельных запросов
 PARSER_CATEGORIES_EXCLUDED = [  # Исключить из парсинга следующие категории:

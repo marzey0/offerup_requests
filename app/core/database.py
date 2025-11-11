@@ -1,7 +1,7 @@
 # app/core/database.py
 import aiosqlite
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from config import DATABASE_PATH
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,8 @@ async def init_db(db_path: str = DATABASE_PATH):
         logger.info("База данных инициализирована.")
 
 
-async def add_ad_if_new(ad_id: str, title: str, seller_id: str, ratings_count: int, db_path: str = DATABASE_PATH) -> bool:
+async def add_ad_if_new(ad_id: str, title: str, seller_id: str, ratings_count: int,
+                        processed_status: Optional[int] = None, db_path: str = DATABASE_PATH) -> bool:
     """
     Добавляет объявление в базу данных, если его ещё нет.
     Возвращает True, если объявление было добавлено как новое.
@@ -60,11 +61,12 @@ async def add_ad_if_new(ad_id: str, title: str, seller_id: str, ratings_count: i
             logger.debug(f"Объявление {ad_id} от продавца {seller_id}, чьи объявления уже обрабатываются. Установлен processed = 0.")
             processed_status = 0  # Не требует обработки
         else:
-            # Проверяем, подходит ли объявление под критерии (0 отзывов) и продавец новый
-            if ratings_count == 0:
-                processed_status = 1  # Требует обработки
-            else:
-                processed_status = 0  # Не требует обработки
+            if processed_status is None:
+                # Проверяем, подходит ли объявление под критерии (0 отзывов) и продавец новый
+                if ratings_count == 0:
+                    processed_status = 1  # Требует обработки
+                else:
+                    processed_status = 0  # Не требует обработки
 
         await db.execute('''
             INSERT INTO ads (ad_id, title, seller_id, ratings_count, processed)

@@ -6,11 +6,10 @@ import os
 from app.core.database import init_db
 from app.parser import OfferUpParser
 from app.utils.logg import setup_logging
-from config import DATABASE_PATH, PARSER_DELAY
 
 
 # --- Настройка логирования ---
-logger_instance = setup_logging(level=logging.DEBUG)
+logger_instance = setup_logging(level=logging.INFO)
 
 
 async def main():
