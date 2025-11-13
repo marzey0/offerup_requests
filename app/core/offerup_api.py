@@ -2,14 +2,14 @@
 import logging
 import uuid
 import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 import random
 import string
 
 import aiohttp
 from aiohttp_socks import ProxyConnector
 
-from config import MAIN_PROXY, OFFERUP_APP_VERSION, OFFERUP_BUILD
+from config import OFFERUP_APP_VERSION, OFFERUP_BUILD
 
 logger = logging.getLogger(__name__)
 
@@ -1447,7 +1447,8 @@ class OfferUpAPI:
         return await self._make_request(
             "GetCategoryTaxonomy", query, variables, requires_auth=False, screen="")
 
-    async def get_new_listings_in_category(self, category_id: str, page_cursor: Optional[str] = None) -> Dict[str, Any]:
+    async def get_new_listings_in_category(
+            self, category_id: str, coordinates: Tuple[float, float], page_cursor: Optional[str] = None) -> Dict[str, Any]:
         query = """
         query GetModularFeed($searchParams: [SearchParam], $debug: Boolean = false) {
           modularFeed(params: $searchParams, debug: $debug) {
@@ -2370,16 +2371,16 @@ class OfferUpAPI:
           __typename
         }
         """
-
+        lat, lon = coordinates
         variables = {
             "debug": False,
             "searchParams": [
                 {"key": "SORT", "value": "newest"},
                 {"key": "cid", "value": category_id},
-                # {"key": "DISTANCE", "value": "5000"},
-                # {"key": "lat", "value": "40.7360524"},
-                # {"key": "lon", "value": "-73.9800987"},
-                # {"key": "zipcode", "value": "10010"},
+                {"key": "DISTANCE", "value": "50"},
+                {"key": "lat", "value": str(lat)},
+                {"key": "lon", "value": str(lon)},
+                # {"key": "zipcode", "value": "650413"},
             ]
         }
 
@@ -2400,20 +2401,20 @@ class OfferUpAPI:
             await self._session.close()
 
 
-async def test():
-    offerup_api = OfferUpAPI(
-        proxy = MAIN_PROXY,
-    )
-    try:
-        categories_response = await offerup_api.get_category_taxonomy()
-        print(categories_response)
-        # parse_response = await offerup_api.get_new_listings_in_category(category_id="1")
-        # print(parse_response)
-    except Exception as e:
-        print(e)
-    finally:
-        await offerup_api.close()
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(test())
+# async def test():
+#     offerup_api = OfferUpAPI(
+#         proxy = MAIN_PROXY,
+#     )
+#     try:
+#         categories_response = await offerup_api.get_category_taxonomy()
+#         print(categories_response)
+#         # parse_response = await offerup_api.get_new_listings_in_category(category_id="1")
+#         # print(parse_response)
+#     except Exception as e:
+#         print(e)
+#     finally:
+#         await offerup_api.close()
+#
+# if __name__ == "__main__":
+#     import asyncio
+#     asyncio.run(test())

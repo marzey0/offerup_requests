@@ -34,7 +34,7 @@ class OfferUpAccount:
             device_id=kwargs.get('device_id'),
             advertising_id=kwargs.get('advertising_id'),
             user_agent=kwargs.get('user_agent'),
-            browser_user_agent=kwargs.get('browser_user_agent')
+            browser_user_agent=kwargs.get('browser_user_agent'),
         )
         self.api.jwt_token = kwargs.get('jwt_token')
         self.api.refresh_token = kwargs.get('refresh_token')

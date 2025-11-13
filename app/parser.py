@@ -2,10 +2,11 @@
 import asyncio
 import datetime
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
+
 from app.core.offerup_api import OfferUpAPI
 from app.core.database import ad_exists, add_ad
-from config import PARSER_DELAY, PARSER_CATEGORIES_EXCLUDED, PARSER_SEMAPHORE, DATABASE_PATH, PARSER_PROXY
+from config import PARSER_DELAY, PARSER_CATEGORIES_EXCLUDED, PARSER_SEMAPHORE, DATABASE_PATH, PARSER_PROXY, CITIES
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,8 @@ class OfferUpParser:
         while self.running:
             try:
                 logger.debug("Начало цикла парсинга...")
-                await self._parse_new_listings()
+                for city, coordinates in CITIES.items():
+                    await self._parse_new_listings(city, coordinates)
                 logger.debug(f"Цикл парсинга завершён. Пауза {self.delay} секунд.")
                 await asyncio.sleep(self.delay)
             except Exception as e:
@@ -62,13 +64,13 @@ class OfferUpParser:
             {'id': '7', 'label': 'category 6'},
         ]
 
-    async def _fetch_listings_for_category(self, category_id: str) -> Optional[List[Dict[str, Any]]]:
+    async def _fetch_listings_for_category(self, category_id: str, coordinates: Tuple[float, float]) -> Optional[List[Dict[str, Any]]]:
         """
         Получает *плитки* с объявлениями для указанной категории.
         Возвращает список плиток типа LISTING.
         """
         try:
-            response = await self.offerup_api.get_new_listings_in_category(category_id=category_id)
+            response = await self.offerup_api.get_new_listings_in_category(category_id, coordinates)
             listings_tiles = []
             modular_feed = response.get('data', {}).get('modularFeed', {})
             loose_tiles = modular_feed.get('looseTiles', [])
@@ -103,7 +105,7 @@ class OfferUpParser:
         async with self.details_semaphore:
             # Проверяем, есть ли объявление в БД перед запросом деталей
             if await ad_exists(ad_id):
-                logger.debug(f"Объявление {ad_id} уже существует в БД, пропуск получения деталей.")
+                # logger.debug(f"Объявление {ad_id} уже существует в БД, пропуск получения деталей.")
                 return None
 
             try:
@@ -112,7 +114,7 @@ class OfferUpParser:
                     logger.warning(f"Не удалось получить детали для объявления {ad_id}.")
                     return None
 
-                logger.debug(f"Получена информация об объявлении: {listing_details}")
+                # logger.debug(f"Получена информация об объявлении: {listing_details}")
                 listing = listing_details.get('data', {}).get('listing', {})
 
                 post_date_str = listing['postDate']
@@ -120,7 +122,8 @@ class OfferUpParser:
                     post_date = datetime.datetime.fromisoformat(post_date_str.replace('Z', '+00:00'))
                     current_time = datetime.datetime.now(datetime.UTC)
                     time_diff = current_time - post_date
-                    logger.debug(f"Объявление {ad_id} опубликовано {time_diff.total_seconds() // 60} минут назад")
+                    location_name = listing["locationDetails"]["locationName"]
+                    logger.debug(f"{ad_id} Опубликовано {time_diff.total_seconds() // 60} минут назад, {location_name}")
                 except (ValueError, AttributeError) as e:
                     logger.warning(f"Ошибка при парсинге даты публикации {post_date_str}: {e}.")
 
@@ -130,7 +133,7 @@ class OfferUpParser:
                 logger.error(f"Ошибка при получении деталей объявления {ad_id}: {e}")
                 return None
 
-    async def _parse_new_listings(self):
+    async def _parse_new_listings(self, city: str, coordinates: Tuple[float, float]):
         """
         Основная логика парсинга:
         1. Получить все категории.
@@ -138,9 +141,10 @@ class OfferUpParser:
         3. Для каждой категории: получить новые объявления, проверить фильтры, сохранить в БД.
         """
         categories = await self._get_categories()
+        logger.info(f"Парсим {city}")
 
         # --- 1. Параллельный запрос всех объявлений из всех категорий ---
-        all_listings_tasks = [self._fetch_listings_for_category(cat["id"]) for cat in categories]
+        all_listings_tasks = [self._fetch_listings_for_category(cat["id"], coordinates) for cat in categories]
         all_listings_results = await asyncio.gather(*all_listings_tasks, return_exceptions=True)
 
         # Собираем все объявления из всех категорий

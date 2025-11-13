@@ -66,7 +66,7 @@ async def add_ad(ad: dict) -> bool:
                 logger.debug(f"Добавлено объявление: {ad_id}")
                 return True
             else:
-                logger.debug(f"Объявление уже существует: {ad_id}")
+                # logger.debug(f"Объявление уже существует: {ad_id}")
                 return False
 
     except Exception as e:
