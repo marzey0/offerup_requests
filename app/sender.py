@@ -44,7 +44,7 @@ class MessageSender:
                 success = await account.process_ad(ad)
                 if success:
                     account.processed = await increment_processed_counter(account.email)
-                    logger.info(f"{account.email} ({account.processed}) - Объявление {ad["ad_id"]} отписано.")
+                    logger.info(f"{account.email} ({account.processed}) - Объявление {ad_id} отписано.")
                 else:
                     await update_ad_processed_status(ad_id, 0)
 

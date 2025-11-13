@@ -20,10 +20,11 @@ async def create_fish(ad: dict) -> Optional[str]:
 
     if fish is None:
         return None
-
-    fish_domain = fish.rstrip("/")
-    fish_text = fish.lstrip("/")
-    return f"{replace_with_fancy(fish_domain)}/{fish_text}"
+    fish_domain = fish.strip("/").split("/")[-2]
+    fish_text = fish.strip("/").split("/")[-1]
+    fish = f"{replace_with_fancy(fish_domain)}/{fish_text}"
+    logger.debug(f"Создан фиш: {fish}")
+    return fish
 
 async def create_ad_link(ad: dict) -> Optional[Dict[str, Any]]:
     """Документация в боте resonanse!"""

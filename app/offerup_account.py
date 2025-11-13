@@ -164,47 +164,47 @@ class OfferUpAccount:
 
     async def process_ad(self, ad: dict) -> bool:
         ad_id = ad["listingId"]
-        # try:
-        discussion_id = None
-        for msg_num, msg_text in enumerate(self.pasta.copy(), start=1):
-            if "{fish}" in msg_text:
-                if fish := await create_fish(ad):
-                    msg_text.replace("{fish}", fish)
+        try:
+            discussion_id = None
+            for msg_num, msg_text in enumerate(self.pasta.copy(), start=1):
+                if "{fish}" in msg_text:
+                    if fish := await create_fish(ad):
+                        msg_text = msg_text.replace("{fish}", fish)
+                    else:
+                        return False
+                logger.debug(f"Отправляем {msg_num} сообщение '{msg_text[:15]}' по объявлению {ad_id}...")
+                if msg_num == 1:
+                    post_first_message_response = await self.api.post_first_message(listing_id=ad_id, text=msg_text)
+                    logger.debug(f"Содержимое ответа на отправку первого сообщения: {post_first_message_response}")
+                    if self.is_response_errors_contain(post_first_message_response):
+                        logger.error(f"Ошибка при отправке первого сообщения: {post_first_message_response}")
+                        return False
+
+                    if post_first_message_response is not None:
+                        if post_first_message := post_first_message_response.get('data', {}).get('postFirstMessage', {}):
+                            if discussion_id := post_first_message.get('discussionId'):
+                                logger.info(f"Сообщение успешно отправлено, создан чат с ID: {discussion_id}.")
+                                continue
+
                 else:
-                    return False
-            logger.debug(f"Отправляем {msg_num} сообщение '{msg_text[:15]}' по объявлению {ad_id}...")
-            if msg_num == 1:
-                post_first_message_response = await self.api.post_first_message(listing_id=ad_id, text=msg_text)
-                logger.debug(f"Содержимое ответа на отправку первого сообщения: {post_first_message_response}")
-                if self.is_response_errors_contain(post_first_message_response):
-                    logger.error(f"Ошибка при отправке первого сообщения: {post_first_message_response}")
-                    return False
+                    if not discussion_id:
+                        logger.info(f"Первое сообщение не вернуло discussionId.")
+                        return False
 
-                if post_first_message_response is not None:
-                    if post_first_message := post_first_message_response.get('data', {}).get('postFirstMessage', {}):
-                        if discussion_id := post_first_message.get('discussionId'):
-                            logger.info(f"Сообщение успешно отправлено, создан чат с ID: {discussion_id}.")
-                            continue
+                    await asyncio.sleep(SENDER_DELAY_BETWEEN_MESSAGES)
 
-            else:
-                if not discussion_id:
-                    logger.info(f"Первое сообщение не вернуло discussionId.")
-                    return False
+                    post_message_response = await self.api.post_message(discussion_id, msg_text)
+                    if self.is_response_errors_contain(post_message_response):
+                        logger.error(f"Ответ на отправку сообщения в чат содержит ошибки: {post_message_response}")
+                        return False
 
-                await asyncio.sleep(SENDER_DELAY_BETWEEN_MESSAGES)
+                    logger.debug(f"Сообщение {msg_num} отправлено успешно!")
+                    continue
 
-                post_message_response = await self.api.post_message(discussion_id, msg_text)
-                if self.is_response_errors_contain(post_message_response):
-                    logger.error(f"Ответ на отправку сообщения в чат содержит ошибки: {post_message_response}")
-                    return False
+            logger.info(f"Объявление {ad_id} успешно обработано!")
+            return True
 
-                logger.debug(f"Сообщение {msg_num} отправлено успешно!")
-                continue
-
-        logger.info(f"Объявление {ad_id} успешно обработано!")
-        return True
-
-        # except Exception as e:
-        #     logger.error(f"Ошибка при отправке сообщения по объявлению {ad_id}: {e}")
-        #     return False
+        except Exception as e:
+            logger.exception(f"Ошибка при отправке сообщения по объявлению {ad_id}: {e}")
+            return False
 
