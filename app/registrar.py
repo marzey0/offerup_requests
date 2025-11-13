@@ -79,7 +79,8 @@ class AccountRegistrar:
             password=self._generate_random_password(),
             name=self.faker.user_name() if "random" in DEFAULT_ACCOUNT_NAME.lower() else DEFAULT_ACCOUNT_NAME,
             proxy=MAIN_PROXY,
-            pasta=DEFAULT_PASTA
+            pasta=DEFAULT_PASTA,
+            anymessage_email_id=email_id
         )
 
         register_result = await self.account.register()
