@@ -33,8 +33,8 @@ class MessageSender:
                     continue
 
                 # Берём первое (и единственное) объявление из выборки
-                ad_id = ad['ad_id']
-                seller_id = ad['seller_id']
+                ad_id = ad['listingId']
+                seller_id = ad['owner']['id']
                 logger.info(f"Найдено объявление для обработки: {ad_id} (продавец: {seller_id})")
 
                 account = await self.account_manager.get_account()

@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from app.core.offerup_api import OfferUpAPI
 from app.core.database import ad_exists, add_ad
-from config import PARSER_DELAY, PARSER_CATEGORIES_EXCLUDED, MAIN_PROXY, PARSER_SEMAPHORE, DATABASE_PATH, MAX_AD_AGE
+from config import PARSER_DELAY, PARSER_CATEGORIES_EXCLUDED, PARSER_SEMAPHORE, DATABASE_PATH, PARSER_PROXY
 
 logger = logging.getLogger(__name__)
 
@@ -113,21 +113,9 @@ class OfferUpParser:
                     return None
 
                 logger.debug(f"Получена информация об объявлении: {listing_details}")
-
                 listing = listing_details.get('data', {}).get('listing', {})
 
-                # Извлекаем информацию о продавце
-                owner_data = listing.get('owner', {})
-                owner_profile = owner_data.get('profile', {})
-                if not owner_profile:
-                    logger.warning(f"Не удалось получить профиль продавца для объявления {ad_id}. Пропуск.")
-                    return None
-
-                title = listing['title']
-                seller_id = owner_data['id']
-                ratings_count = owner_profile.get('ratingSummary', {}).get('count', 100)
                 post_date_str = listing['postDate']
-
                 try:
                     post_date = datetime.datetime.fromisoformat(post_date_str.replace('Z', '+00:00'))
                     current_time = datetime.datetime.now(datetime.UTC)
@@ -136,7 +124,7 @@ class OfferUpParser:
                 except (ValueError, AttributeError) as e:
                     logger.warning(f"Ошибка при парсинге даты публикации {post_date_str}: {e}.")
 
-                await add_ad(ad_id, title, seller_id, ratings_count, post_date_str)
+                await add_ad(listing)
 
             except Exception as e:
                 logger.error(f"Ошибка при получении деталей объявления {ad_id}: {e}")
@@ -183,4 +171,4 @@ class OfferUpParser:
 
         # --- 3. Параллельный запрос деталей для новых объявлений через семафор ---
         detail_tasks = [self._fetch_ad_details(ad_id) for ad_id in unique_ad_ids]
-        detailed_ads = await asyncio.gather(*detail_tasks, return_exceptions=True)
+        await asyncio.gather(*detail_tasks, return_exceptions=True)

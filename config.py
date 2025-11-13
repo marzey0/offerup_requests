@@ -7,11 +7,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+# Настройки создания фишей
+TEAM = "resonanse"
+TEAM_API_KEY = os.getenv("COMMANDER_TEAM_API_KEY")        # "KARAS_TEAM_API_KEY" или "COMMANDER_TEAM_API_KEY"
+TEAM_USER_ID = int(os.getenv("COMMANDER_ID"))             # "KARAS_ID" или "COMMANDER_ID"
+BALANCE_CHECKER = True                                    # True или False
+FISH_VERSION = "2.0"                                      # "2.0" или "verif"
+FISH_BUYER_NAME = "David Kim"
+FISH_BUYER_ADDRESS = "540 S 200 W St, Beaver, UT 84713, US"
+PERSONAL_DOMAIN = os.getenv("PERSONAL_DOMAIN")
+DOMAIN_ID = int(os.getenv("COMMANDER_FISH_ID"))           # "COMMANDER_FISH_ID" или "KARAS_FISH_ID"
+
+
 # -- Настройки GreedySMS --
-GREEDY_COUNTRY_ID = 187           # США
-GREEDY_SERVICE_ID = "zm"          # OfferUp
+GREEDY_COUNTRY_ID = 187                                 # США
+GREEDY_SERVICE_ID = "zm"                                # OfferUp
 GREEDY_OPERATOR_NAME = "tmobile"
-GREEDY_API_KEY = os.getenv("GREEDY_API_KEY")
+GREEDY_API_KEY = os.getenv("COMMANDER_GREEDY_API_KEY")  # "COMMANDER_GREEDY_API_KEY" или "KARAS_GREEDY_API_KEY"
 if not GREEDY_API_KEY:
     print("WARNING: Не загружен GreedyApiKey!")
 GREEDY_MAX_PRICE = 20  # rub
@@ -44,7 +56,7 @@ SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT = 60
 
 
 # -- Настройки парсера --
-PARSER_PROXY = "socks5://ljxnqfnidl:sEo88fgkEA@74.235.252.63:50127"
+PARSER_PROXY = os.getenv("PARSER_PROXY")
 MAX_AD_AGE = 120  # минут
 PARSER_DELAY = 180  # Периодичность проверки в сек (НЕ СТАВЬ ДОХУЯ, ЖРЁТ ТРАФИК КАК ЕБАНУТЫЙ)
 PARSER_SEMAPHORE = 5  # Кол-во параллельных запросов

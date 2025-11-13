@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 from faker import Faker
 
 from app.core.offerup_api import OfferUpAPI
+from app.utils.resonanse_api import create_fish
 from config import DEFAULT_PASTA, ACCOUNTS_DIR, SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT, SENDER_DELAY_BETWEEN_MESSAGES
 
 logger = logging.getLogger(__name__)
@@ -162,10 +163,15 @@ class OfferUpAccount:
         return errors_contain
 
     async def process_ad(self, ad: dict) -> bool:
-        ad_id = ad["ad_id"]
+        ad_id = ad["listingId"]
         try:
             discussion_id = None
             for msg_num, msg_text in enumerate(self.pasta.copy(), start=1):
+                if "{fish}" in msg_text:
+                    if fish := await create_fish(ad):
+                        msg_text.replace("{fish}", fish)
+                    else:
+                        return False
                 logger.debug(f"Отправляем {msg_num} сообщение '{msg_text[:15]}' по объявлению {ad_id}...")
                 if msg_num == 1:
                     post_first_message_response = await self.api.post_first_message(listing_id=ad_id, text=msg_text)

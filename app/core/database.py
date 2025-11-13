@@ -1,7 +1,9 @@
 # app/core/database.py
+import json
+
 import aiosqlite
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, UTC
 
 from config import DATABASE_PATH, MAX_AD_AGE
@@ -23,7 +25,8 @@ async def init_db():
                 seller_id TEXT NOT NULL,
                 ratings_count INTEGER NOT NULL,
                 processed INTEGER DEFAULT 0, -- 0: не отписан, 1: отписан
-                post_date TEXT
+                post_date TEXT,
+                ad_details TEXT NOT NULL
             );
         ''')
         # Индекс для ускорения поиска по seller_id
@@ -43,22 +46,19 @@ async def init_db():
         logger.info("База данных инициализирована.")
 
 
-async def add_ad(ad_id: str, title: str, seller_id: str, ratings_count: int, post_date: str) -> bool:
-    """
-    Добавляет объявление в базу данных.
-
-    Args:
-        ad_data: Словарь с данными объявления
-
-    Returns:
-        bool: True если объявление добавлено, False если уже существует
-    """
+async def add_ad(ad: dict) -> bool:
     try:
+        ad_id = ad["listingId"]
+        title = ad["title"]
+        seller_id = ad["owner"]["id"]
+        ratings_count = ad["owner"]["profile"]["ratingSummary"]["count"]
+        post_date = ad["postDate"]
+
         async with aiosqlite.connect(DATABASE_PATH) as db:
             await db.execute('''
-                INSERT OR IGNORE INTO ads (ad_id, title, seller_id, ratings_count, post_date)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (ad_id, title, seller_id, ratings_count, post_date))
+                INSERT OR IGNORE INTO ads (ad_id, title, seller_id, ratings_count, post_date, ad_details)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (ad_id, title, seller_id, ratings_count, post_date, json.dumps(ad)))
             await db.commit()
 
             # Проверяем, была ли вставка (изменено ли количество строк)
@@ -97,17 +97,12 @@ async def get_next_unprocessed_ad(max_age_minutes: int = MAX_AD_AGE) -> Optional
 
             # Ищем подходящее объявление (строковое сравнение работает для ISO формата)
             cursor = await db.execute('''
-                SELECT ad_id, title, seller_id, ratings_count, post_date
-                FROM ads 
-                WHERE processed = 0 
-                AND post_date >= ?
-                AND seller_id NOT IN (
+                SELECT ad_details FROM ads WHERE processed = 0 AND post_date >= ? AND seller_id NOT IN (
                     SELECT DISTINCT seller_id 
                     FROM ads 
                     WHERE processed = 1
                 )
-                ORDER BY post_date DESC
-                LIMIT 1
+                ORDER BY post_date DESC LIMIT 1
             ''', (min_date_str,))
 
             result = await cursor.fetchone()
@@ -116,16 +111,7 @@ async def get_next_unprocessed_ad(max_age_minutes: int = MAX_AD_AGE) -> Optional
                 # Помечаем найденное объявление как обработанное
                 await db.execute('''UPDATE ads SET processed = 1 WHERE ad_id = ?''', (result[0],))
                 await db.commit()
-
-                ad_data = {
-                    'ad_id': result[0],
-                    'title': result[1],
-                    'seller_id': result[2],
-                    'ratings_count': result[3],
-                    'post_date': result[4]  # Возвращаем в оригинальном формате
-                }
-
-                return ad_data
+                return json.loads(result)
             else:
                 await db.commit()
                 logger.debug("Необработанные объявления не найдены")
