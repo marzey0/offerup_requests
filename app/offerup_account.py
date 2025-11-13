@@ -179,7 +179,7 @@ class OfferUpAccount:
                     owner_name = ad["owner"]["profile"]["name"],
                 )
 
-                logger.debug(f"Отправляем {msg_num} сообщение '{msg_text[:15]}' по объявлению {ad_id}...")
+                logger.debug(f"Отправляем {msg_num} сообщение '{msg_text}' по объявлению {ad_id}...")
                 if msg_num == 1:
                     post_first_message_response = await self.api.post_first_message(listing_id=ad_id, text=msg_text)
                     logger.debug(f"Содержимое ответа на отправку первого сообщения: {post_first_message_response}")

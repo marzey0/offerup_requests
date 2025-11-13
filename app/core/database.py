@@ -97,7 +97,7 @@ async def get_next_unprocessed_ad(max_age_minutes: int = MAX_AD_AGE) -> Optional
 
             # Ищем подходящее объявление (строковое сравнение работает для ISO формата)
             cursor = await db.execute('''
-                SELECT ad_details FROM ads WHERE processed = 0 AND post_date >= ? AND seller_id NOT IN (
+                SELECT ad_id, ad_details FROM ads WHERE processed = 0 AND post_date >= ? AND seller_id NOT IN (
                     SELECT DISTINCT seller_id 
                     FROM ads 
                     WHERE processed = 1
@@ -109,9 +109,10 @@ async def get_next_unprocessed_ad(max_age_minutes: int = MAX_AD_AGE) -> Optional
 
             if result:
                 # Помечаем найденное объявление как обработанное
-                await db.execute('''UPDATE ads SET processed = 1 WHERE ad_id = ?''', (result[0],))
+                ad_id, ad_details = result
+                await db.execute('''UPDATE ads SET processed = 1 WHERE ad_id = ?''', (ad_id,))
                 await db.commit()
-                return json.loads(result[0])
+                return json.loads(ad_details)
             else:
                 await db.commit()
                 logger.debug("Необработанные объявления не найдены")
