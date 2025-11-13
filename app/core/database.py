@@ -111,7 +111,7 @@ async def get_next_unprocessed_ad(max_age_minutes: int = MAX_AD_AGE) -> Optional
                 # Помечаем найденное объявление как обработанное
                 await db.execute('''UPDATE ads SET processed = 1 WHERE ad_id = ?''', (result[0],))
                 await db.commit()
-                return json.loads(result)
+                return json.loads(result[0])
             else:
                 await db.commit()
                 logger.debug("Необработанные объявления не найдены")
