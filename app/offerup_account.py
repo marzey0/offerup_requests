@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 from faker import Faker
 
 from app.core.offerup_api import OfferUpAPI
-from app.utils.resonanse_api import create_fish
+from app.utils.teams_api import create_fish
 from config import DEFAULT_PASTA, ACCOUNTS_DIR, SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT, SENDER_DELAY_BETWEEN_MESSAGES
 
 logger = logging.getLogger(__name__)

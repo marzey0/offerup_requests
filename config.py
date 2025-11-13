@@ -18,6 +18,8 @@ FISH_BUYER_ADDRESS = "540 S 200 W St, Beaver, UT 84713, US"
 PERSONAL_DOMAIN = os.getenv("PERSONAL_DOMAIN")
 DOMAIN_ID = int(os.getenv("COMMANDER_FISH_ID"))           # "COMMANDER_FISH_ID" или "KARAS_FISH_ID"
 
+FANCY_ORIGINAL_TEXT = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
+FANCY_SHRIFT_TEXT = '𝑎𝑏𝑐𝑑𝑒𝑓𝑔ℎ𝑖𝑗𝑘𝑙𝑚𝑛𝑜𝑝𝑞𝑟𝑠𝑡𝑢𝑣𝑤𝑥𝑦𝑧𝐴𝐵𝐶𝐷𝐸𝐹𝐺𝐻𝐼𝐽𝐾𝐿𝑀𝑁𝑂𝑃𝑄𝑅𝑆𝑇𝑈𝑉𝑊𝑋𝑌𝑍1234567890'
 
 # -- Настройки GreedySMS --
 GREEDY_COUNTRY_ID = 187                                 # США
