@@ -172,6 +172,13 @@ class OfferUpAccount:
                         msg_text = msg_text.replace("{fish}", fish)
                     else:
                         return False
+
+                msg_text = msg_text.format(
+                    title = ad["title"],
+                    price = ad["price"],
+                    owner_name = ad["owner"]["profile"]["name"],
+                )
+
                 logger.debug(f"Отправляем {msg_num} сообщение '{msg_text[:15]}' по объявлению {ad_id}...")
                 if msg_num == 1:
                     post_first_message_response = await self.api.post_first_message(listing_id=ad_id, text=msg_text)

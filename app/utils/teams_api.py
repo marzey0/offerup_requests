@@ -42,7 +42,7 @@ async def create_ad_link(ad: dict) -> Optional[Dict[str, Any]]:
         if config.FISH_VERSION == "2.0":
             payload["version"] = 2
             payload["photo"] = ad["photos"][0]["detailSquare"]["url"]
-            payload["price"] = ad["price"]
+            payload["price"] = "$" + ad["price"]
             payload["about"] = ad["description"]
             payload["name"] = config.FISH_BUYER_NAME
             payload["address"] = config.FISH_BUYER_ADDRESS
