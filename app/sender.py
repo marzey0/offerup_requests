@@ -50,15 +50,18 @@ class MessageSender:
 
                 if account.banned:
                     logger.warning(f"{account.email} забанен! Отписал: {account.processed}")
-                    self.account_manager.remove_account(account.email)
+                    # self.account_manager.remove_account(account.email)
+                    self.account_manager.archive_account(account.email)
                     continue
                 elif account.unauthorized:
                     logger.warning(f"{account.email} разлогинило! Отписал: {account.processed}")
-                    self.account_manager.remove_account(account.email)
+                    # self.account_manager.remove_account(account.email)
+                    self.account_manager.archive_account(account.email)
                     continue
                 elif account.unverified:
                     logger.warning(f"{account.email} кинуло на вериф! Отписал: {account.processed}")
-                    self.account_manager.remove_account(account.email)
+                    # self.account_manager.remove_account(account.email)
+                    self.account_manager.archive_account(account.email)
                     continue
 
                 asyncio.create_task(self.account_manager.return_account_to_queue(account))
