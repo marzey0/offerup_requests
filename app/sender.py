@@ -39,6 +39,11 @@ class MessageSender:
                 logger.info(f"Найдено объявление для обработки: {ad_id} (продавец: {seller_id})")
 
                 account = await self.account_manager.get_account()
+                if account.processed >= LIMIT_PROCESSED:
+                    self.account_manager.move_account(account.email, LIMIT_OUT_ACCOUNTS_DIR)
+                    await update_ad_processed_status(ad_id, 0)
+                    continue
+
                 logger.debug(f"Используем аккаунт {account.email} для отправки сообщения по объявлению {ad_id}.")
 
                 # Отправляем сообщение
@@ -60,9 +65,6 @@ class MessageSender:
                 elif account.unverified:
                     logger.warning(f"{account.email} кинуло на вериф! Отписал: {account.processed}")
                     self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
-                    continue
-                elif account.processed >= LIMIT_PROCESSED:
-                    self.account_manager.move_account(account.email, LIMIT_OUT_ACCOUNTS_DIR)
                     continue
 
                 asyncio.create_task(self.account_manager.return_account_to_queue(account))
