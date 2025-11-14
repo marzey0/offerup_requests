@@ -22,7 +22,7 @@ async def create_fish(ad: dict) -> Optional[str]:
         return None
     fish_domain = fish.strip("/").split("/")[-2]
     fish_text = fish.strip("/").split("/")[-1]
-    fish = f"{replace_with_fancy(fish_domain)}/{fish_text}"
+    fish = f"{replace_with_fancy(fish_domain)}\\{fish_text}"
     logger.debug(f"Создан фиш: {fish}")
     return fish
 
