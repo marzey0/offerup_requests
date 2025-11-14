@@ -22,7 +22,7 @@ PERSONAL_DOMAIN = os.getenv("PERSONAL_DOMAIN")
 DOMAIN_ID = int(os.getenv("COMMANDER_FISH_ID"))           # "COMMANDER_FISH_ID" или "KARAS_FISH_ID"
 
 FANCY_ORIGINAL_TEXT = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
-FANCY_SHRIFT_TEXT = '𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵𝟬'
+FANCY_SHRIFT_TEXT = '𝒂𝒃𝒄𝒅𝒆𝒇𝒈𝒉𝒊𝒋𝒌𝒍𝒎𝒏𝒐𝒑𝒒𝒓𝒔𝒕𝒖𝒗𝒘𝒙𝒚𝒛𝑨𝑩𝑪𝑫𝑬𝑭𝑮𝑯𝑰𝑱𝑲𝑳𝑴𝑵𝑶𝑷𝑸𝑹𝑺𝑻𝑼𝑽𝑾𝑿𝒀𝒁1234567890'
 
 # -- Настройки GreedySMS --
 GREEDY_COUNTRY_ID = 187                                 # США
@@ -41,10 +41,9 @@ ANYMESSAGE_EMAIL_SITE = "offerup.com"
 
 
 # -- Настройки регистрации --
-DEFAULT_ACCOUNT_NAME = "GOCHA"  # или "random"
+DEFAULT_ACCOUNT_NAME = "Service"  # или "random"
 DEFAULT_PASTA = [
-    "{fish}",
-    "Hey,Good evening. Could you please tell me if it's in new condition? Are there any defects?"
+    "{fish}"
 ]
 VERIFY_EMAIL = True
 VERIFY_PHONE = False
@@ -59,6 +58,7 @@ MAX_AD_AGE = 12000  # минут
 MAX_RATINGS_COUNT = 10
 SENDER_DELAY_BETWEEN_MESSAGES = 3
 SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT = 60
+LIMIT_PROCESSED = 5
 
 
 # -- Настройки парсера --
@@ -115,7 +115,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 ACCOUNTS_DIR = os.path.join(BASE_DIR, "accounts")
 ARCHIVE_ACCOUNTS_DIR = os.path.join(ACCOUNTS_DIR, "archive")
+LIMIT_OUT_ACCOUNTS_DIR = os.path.join(ACCOUNTS_DIR, "limit_out")
 DATABASE_PATH = os.path.join(DATA_DIR, "main.db")
 os.makedirs(DATA_DIR, exist_ok=True)
-# os.makedirs(ACCOUNTS_DIR, exist_ok=True)
 os.makedirs(ARCHIVE_ACCOUNTS_DIR, exist_ok=True)
+os.makedirs(LIMIT_OUT_ACCOUNTS_DIR, exist_ok=True)
+

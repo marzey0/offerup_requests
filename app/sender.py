@@ -3,6 +3,7 @@ import asyncio
 import logging
 from app.core.database import get_next_unprocessed_ad, increment_processed_counter, update_ad_processed_status
 from app.account_manager import AccountManager
+from config import ARCHIVE_ACCOUNTS_DIR, LIMIT_PROCESSED, LIMIT_OUT_ACCOUNTS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -50,18 +51,18 @@ class MessageSender:
 
                 if account.banned:
                     logger.warning(f"{account.email} забанен! Отписал: {account.processed}")
-                    # self.account_manager.remove_account(account.email)
-                    self.account_manager.archive_account(account.email)
+                    self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
                     continue
                 elif account.unauthorized:
                     logger.warning(f"{account.email} разлогинило! Отписал: {account.processed}")
-                    # self.account_manager.remove_account(account.email)
-                    self.account_manager.archive_account(account.email)
+                    self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
                     continue
                 elif account.unverified:
                     logger.warning(f"{account.email} кинуло на вериф! Отписал: {account.processed}")
-                    # self.account_manager.remove_account(account.email)
-                    self.account_manager.archive_account(account.email)
+                    self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
+                    continue
+                elif account.processed >= LIMIT_PROCESSED:
+                    self.account_manager.move_account(account.email, LIMIT_OUT_ACCOUNTS_DIR)
                     continue
 
                 asyncio.create_task(self.account_manager.return_account_to_queue(account))

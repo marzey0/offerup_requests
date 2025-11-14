@@ -3,14 +3,14 @@ import logging
 import os
 import asyncio
 import shutil
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Literal
 from asyncio import Queue
 
 from faker.generator import random
 
 from app.core.database import get_processed_count
 from app.offerup_account import OfferUpAccount
-from config import ACCOUNTS_DIR, ARCHIVE_ACCOUNTS_DIR
+from config import ACCOUNTS_DIR, ARCHIVE_ACCOUNTS_DIR, LIMIT_OUT_ACCOUNTS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -157,13 +157,7 @@ class AccountManager:
         else:
             logger.warning(f"Попытка удалить несуществующий аккаунт {key}.")
 
-    def archive_account(self, key: str):
-        """
-        Архивирует аккаунт - перемещает его файл в папку archive.
-
-        Args:
-            key: Ключ аккаунта (email)
-        """
+    def move_account(self, key: str, dir_: ARCHIVE_ACCOUNTS_DIR | LIMIT_OUT_ACCOUNTS_DIR):
         if key not in self.accounts:
             logger.warning(f"Попытка архивировать несуществующий аккаунт {key}.")
             return False
@@ -171,20 +165,17 @@ class AccountManager:
         try:
             account = self.accounts[key]
             original_filepath = account.filepath
+            filename = original_filepath.split("/")[-1]
 
             if not os.path.exists(original_filepath):
                 logger.warning(f"Файл аккаунта {key} не найден: {original_filepath}")
                 return False
 
-            archive_filepath = os.path.join(ARCHIVE_ACCOUNTS_DIR, original_filepath)
-
-            # Перемещаем файл в архив
-            shutil.move(original_filepath, archive_filepath)
-
-            # Удаляем аккаунт из менеджера
+            new_filepath = os.path.join(dir_, filename)
+            shutil.move(original_filepath, new_filepath)
             del self.accounts[key]
 
-            logger.info(f"Аккаунт {key} перемещен в архив: {archive_filepath}")
+            logger.info(f"Аккаунт {key} перемещен в новую директорию: {dir_}")
             return True
 
         except Exception as e:
