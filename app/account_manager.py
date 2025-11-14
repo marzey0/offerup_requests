@@ -157,7 +157,7 @@ class AccountManager:
         else:
             logger.warning(f"Попытка удалить несуществующий аккаунт {key}.")
 
-    def move_account(self, key: str, dir_: ARCHIVE_ACCOUNTS_DIR | LIMIT_OUT_ACCOUNTS_DIR):
+    def move_account(self, key: str, dir_: str):
         if key not in self.accounts:
             logger.warning(f"Попытка архивировать несуществующий аккаунт {key}.")
             return False
