@@ -22,7 +22,7 @@ PERSONAL_DOMAIN = os.getenv("PERSONAL_DOMAIN")
 DOMAIN_ID = int(os.getenv("COMMANDER_FISH_ID"))           # "COMMANDER_FISH_ID" или "KARAS_FISH_ID"
 
 FANCY_ORIGINAL_TEXT = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
-FANCY_SHRIFT_TEXT = '𝑎𝑏𝑐𝑑𝑒𝑓𝑔ℎ𝑖𝑗𝑘𝑙𝑚𝑛𝑜𝑝𝑞𝑟𝑠𝑡𝑢𝑣𝑤𝑥𝑦𝑧𝐴𝐵𝐶𝐷𝐸𝐹𝐺𝐻𝐼𝐽𝐾𝐿𝑀𝑁𝑂𝑃𝑄𝑅𝑆𝑇𝑈𝑉𝑊𝑋𝑌𝑍1234567890'
+FANCY_SHRIFT_TEXT = '𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵𝟬'
 
 # -- Настройки GreedySMS --
 GREEDY_COUNTRY_ID = 187                                 # США
@@ -36,15 +36,15 @@ GREEDY_MAX_PRICE = 20  # rub
 
 # -- Настройки AnyMessage --
 ANYMESSAGE_API_KEY = os.getenv("ANYMESSAGE_API_KEY")
-ANYMESSAGE_EMAIL_DOMAIN = "gmx.us"
+ANYMESSAGE_EMAIL_DOMAIN = "gmail.com"
 ANYMESSAGE_EMAIL_SITE = "offerup.com"
 
 
 # -- Настройки регистрации --
-DEFAULT_ACCOUNT_NAME = "𝙊𝙛𝙛𝙚𝙧𝙐𝙥✅"  # или "random"
+DEFAULT_ACCOUNT_NAME = "GOCHA"  # или "random"
 DEFAULT_PASTA = [
-    "HELLO",
-    "{fish}"
+    "{fish}",
+    "Hey,Good evening. Could you please tell me if it's in new condition? Are there any defects?"
 ]
 VERIFY_EMAIL = True
 VERIFY_PHONE = False
@@ -56,6 +56,7 @@ REGISTRAR_DELAY = 5
 
 # -- Настройки сендера
 MAX_AD_AGE = 12000  # минут
+MAX_RATINGS_COUNT = 10
 SENDER_DELAY_BETWEEN_MESSAGES = 3
 SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT = 60
 
@@ -93,16 +94,16 @@ PARSER_DELAY = 180  # Периодичность проверки в сек (Н�
 PARSER_SEMAPHORE = 5  # Кол-во параллельных запросов
 PARSER_CATEGORIES_EXCLUDED = [  # Исключить из парсинга следующие категории:
     # "Electronics & Media",
-    "Home & Garden",
-    "Clothing, Shoes, & Accessories",
-    "Baby & Kids",
+    # "Home & Garden",
+    # "Clothing, Shoes, & Accessories",
+    # "Baby & Kids",
     "Vehicles",
-    "Toys, Games, & Hobbies",
-    "Sports & Outdoors",
-    "Collectibles & Art",
-    "Pet supplies",
-    "Health & Beauty",
-    "Wedding",
+    # "Toys, Games, & Hobbies",
+    # "Sports & Outdoors",
+    # "Collectibles & Art",
+    # "Pet supplies",
+    # "Health & Beauty",
+    # "Wedding",
     "Business equipment",
     "Tickets",
     "General"

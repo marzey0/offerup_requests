@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, UTC
 
-from config import DATABASE_PATH, MAX_AD_AGE
+from config import DATABASE_PATH, MAX_AD_AGE, MAX_RATINGS_COUNT
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ async def get_next_unprocessed_ad(max_age_minutes: int = MAX_AD_AGE) -> Optional
                 SELECT ad_id, ad_details 
                 FROM ads 
                 WHERE processed = 0
-                AND ratings_count = 0
+                AND ratings_count = ?
                 AND post_date >= ? 
                 AND seller_id NOT IN (
                     SELECT DISTINCT seller_id 
@@ -108,7 +108,7 @@ async def get_next_unprocessed_ad(max_age_minutes: int = MAX_AD_AGE) -> Optional
                     WHERE processed = 1
                 )
                 ORDER BY post_date DESC LIMIT 1
-            ''', (min_date_str,))
+            ''', (min_date_str, MAX_RATINGS_COUNT))
 
             result = await cursor.fetchone()
 
