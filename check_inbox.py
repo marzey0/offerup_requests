@@ -1,5 +1,6 @@
 import asyncio
 import os
+from typing import List, Tuple
 
 import config
 from app.core.database import get_processed_count
@@ -8,31 +9,23 @@ from app.offerup_account import OfferUpAccount
 
 async def check_inbox():
     print("Инициализация аккаунтов")
-    accounts = []
-    archive_accounts = []
+    accounts: List[Tuple[str, OfferUpAccount]] = []
 
-    accounts_dir = config.ACCOUNTS_DIR
-    for filename in os.listdir(accounts_dir):
-        if filename.endswith(".json"):
-            print(f"Загрузка аккаунта: {filename}")
-            filepath = os.path.join(accounts_dir, filename)
-            if account := OfferUpAccount.load_from_file(filepath):
-                account.processed = await get_processed_count(account.email)
-                accounts.append(account)
+    for dir_ in (config.ACCOUNTS_DIR, config.ARCHIVE_ACCOUNTS_DIR, config.LIMIT_OUT_ACCOUNTS_DIR):
+        dir_name = dir_.split("/")[-1]
+        for filename in os.listdir(dir_):
+            if filename.endswith(".json"):
+                print(f"Загрузка аккаунта: {filename}")
+                filepath = os.path.join(config.ACCOUNTS_DIR, filename)
+                if account := OfferUpAccount.load_from_file(filepath):
+                    account.processed = await get_processed_count(account.email)
+                    accounts.append((dir_name, account))
 
-    archive_dir = config.ARCHIVE_ACCOUNTS_DIR
-    for filename in os.listdir(archive_dir):
-        if filename.endswith(".json"):
-            print(f"Загрузка архивного аккаунта: {filename}")
-            filepath = os.path.join(archive_dir, filename)
-            if account := OfferUpAccount.load_from_file(filepath):
-                account.processed = await get_processed_count(account.email)
-                archive_accounts.append(account)
 
-    print(f"Загружено аккаунтов: {len(accounts)}, архивных: {len(archive_accounts)}")
+    print(f"Загружено аккаунтов: {len(accounts)}")
     print("\n-----------------------------------------\n")
 
-    for account in accounts:
+    for dir_name, account in accounts:
         try:
             inbox_response = await account.api.get_unread_alert_count()
         except Exception as e:
@@ -40,18 +33,7 @@ async def check_inbox():
             continue
 
         inbox_messages = inbox_response["data"]["unreadNotificationCount"]["inbox"]
-        print(f"{account.email} - Отписано: {account.processed}, Входящие: {inbox_messages}")
-        await account.api.close()
-
-    for account in archive_accounts:
-        try:
-            inbox_response = await account.api.get_unread_alert_count()
-        except Exception as e:
-            print(f"Ошибка {e.__class__.__name__} при запросе входящих на аккаунте {account.email}: {e}")
-            continue
-
-        inbox_messages = inbox_response["data"]["unreadNotificationCount"]["inbox"]
-        print(f"[архив] {account.email} - Отписано: {account.processed}, Входящие: {inbox_messages}")
+        print(f"[{dir_name}] {account.email} - Отписано: {account.processed}, Входящие: {inbox_messages}")
         await account.api.close()
 
 
