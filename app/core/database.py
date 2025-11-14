@@ -100,7 +100,7 @@ async def get_next_unprocessed_ad(max_age_minutes: int = MAX_AD_AGE) -> Optional
                 SELECT ad_id, ad_details 
                 FROM ads 
                 WHERE processed = 0
-                AND ratings_count = ?
+                AND ratings_count <= ?
                 AND post_date >= ? 
                 AND seller_id NOT IN (
                     SELECT DISTINCT seller_id 

@@ -1,6 +1,7 @@
 
 accounts/
 data/
+*.db
 
 # дефолтные:
 __pycache__/
