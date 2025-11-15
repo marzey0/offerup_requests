@@ -70,7 +70,7 @@ class AccountManager:
                 new_files = current_files - existing_files
 
                 if new_files:
-                    logger.info(f"Найдены новые файлы аккаунтов: {new_files}")
+                    # logger.info(f"Найдены новые файлы аккаунтов: {new_files}")
                     for filename in new_files:
                         filepath = os.path.join(self.accounts_dir, filename)
                         await self._load_single_account(filepath)
@@ -120,7 +120,7 @@ class AccountManager:
                 logger.warning(f"Аккаунт с ключом {key} не найден в словаре при выдаче.")
                 # Повторяем попытку получения другого аккаунта
                 return await self.get_account()
-            logger.debug(f"Аккаунт {key} предоставлен для использования.")
+            # logger.debug(f"Аккаунт {key} предоставлен для использования.")
             return account
 
     async def return_account_to_queue(self, account: OfferUpAccount):
@@ -153,7 +153,7 @@ class AccountManager:
             account = self.accounts[key]
             account.delete_file()
             del self.accounts[key]
-            logger.info(f"Аккаунт {key} удалён из менеджера и файл удален.")
+            logger.debug(f"Аккаунт {key} удалён из менеджера и файл удален.")
         else:
             logger.warning(f"Попытка удалить несуществующий аккаунт {key}.")
 
@@ -175,7 +175,7 @@ class AccountManager:
             shutil.move(original_filepath, new_filepath)
             del self.accounts[key]
 
-            logger.info(f"Аккаунт {key} перемещен в новую директорию: {dir_}")
+            logger.info(f"Аккаунт {key} перемещен в новую директорию: {original_filepath} -> {new_filepath}")
             return True
 
         except Exception as e:

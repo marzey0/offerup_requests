@@ -9,6 +9,7 @@ from faker import Faker
 
 from app.core.offerup_api import OfferUpAPI
 from app.utils.teams_api import create_fish
+from app.utils.text_formatter import format_text_words
 from config import DEFAULT_PASTA, ACCOUNTS_DIR, SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT, SENDER_DELAY_BETWEEN_MESSAGES
 
 logger = logging.getLogger(__name__)
@@ -36,8 +37,8 @@ class OfferUpAccount:
             user_agent=kwargs.get('user_agent'),
             browser_user_agent=kwargs.get('browser_user_agent'),
         )
-        self.api.jwt_token = kwargs.get('jwt_token')
-        self.api.refresh_token = kwargs.get('refresh_token')
+        self.jwt_token = self.api.jwt_token = kwargs.get('jwt_token')
+        self.refresh_token = self.api.refresh_token = kwargs.get('refresh_token')
 
         # Данные сессии и авторизации
         self.name = kwargs.get('name', Faker().user_name())
@@ -111,7 +112,7 @@ class OfferUpAccount:
         try:
             if os.path.exists(self.filepath):
                 os.remove(self.filepath)
-                logger.info(f"Файл аккаунта удалён: {self.filepath}")
+                logger.debug(f"Файл аккаунта удалён: {self.filepath}")
             else:
                 logger.warning(f"Файл аккаунта не найден для удаления: {self.filepath}")
         except Exception as e:
@@ -129,6 +130,32 @@ class OfferUpAccount:
             self.user_id = str(signup_data['id'])
             self.jwt_token = self.api.jwt_token = signup_data['sessionToken']['value']
             self.refresh_token = self.api.refresh_token = signup_data['refreshToken']['value']
+            self.cookies = [
+                {
+                    "domain": "offerup.com",
+                    "hostOnly": True,
+                    "httpOnly": False,
+                    "name": "jwt_token",
+                    "path": "/",
+                    "sameSite": None,
+                    "secure": False,
+                    "session": True,
+                    "storeId": None,
+                    "value": self.jwt_token,
+                },
+                {
+                    "domain": "offerup.com",
+                    "hostOnly": True,
+                    "httpOnly": False,
+                    "name": "refresh_token",
+                    "path": "/",
+                    "sameSite": None,
+                    "secure": False,
+                    "session": True,
+                    "storeId": None,
+                    "value": self.refresh_token,
+                }
+            ]
 
             if not self.jwt_token or not self.refresh_token or not self.user_id:
                 logger.error(f"Не все токены/ID получены при регистрации {self.email}.")
@@ -156,6 +183,8 @@ class OfferUpAccount:
                     error_title = error.get("extensions", {}).get("exception", {}).get("originalError", {}).get("error", {}).get("title")
                     if error_title and error_title in ("Verification Required", "Verify your phone to continue"):
                         self.unverified = True
+                    elif error_title == "Request challenged":
+                        self.banned = True
                 elif error.get("message") == "Request failed with status code 401":
                     self.unauthorized = True
                 elif error.get("message") == "Request failed with status code 429":
@@ -178,6 +207,8 @@ class OfferUpAccount:
                     price = ad["price"],
                     owner_name = ad["owner"]["profile"]["name"],
                 )
+                # Рандомизируем невидимым символом
+                msg_text = format_text_words(msg_text)
 
                 logger.debug(f"Отправляем {msg_num} сообщение '{msg_text}' по объявлению {ad_id}...")
                 if msg_num == 1:
@@ -190,7 +221,7 @@ class OfferUpAccount:
                     if post_first_message_response is not None:
                         if post_first_message := post_first_message_response.get('data', {}).get('postFirstMessage', {}):
                             if discussion_id := post_first_message.get('discussionId'):
-                                logger.info(f"Сообщение успешно отправлено, создан чат с ID: {discussion_id}.")
+                                logger.debug(f"Сообщение успешно отправлено, создан чат с ID: {discussion_id}.")
                                 continue
 
                 else:
@@ -208,7 +239,7 @@ class OfferUpAccount:
                     logger.debug(f"Сообщение {msg_num} отправлено успешно!")
                     continue
 
-            logger.info(f"Объявление {ad_id} успешно обработано!")
+            logger.debug(f"Объявление {ad_id} успешно обработано!")
             return True
 
         except Exception as e:

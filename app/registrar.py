@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import json
+import random
 import traceback
 import uuid
 from typing import Dict, Any, Optional
@@ -13,7 +14,7 @@ from app.offerup_account import OfferUpAccount
 from config import (
     REGISTRAR_DELAY,
     DEFAULT_PASTA,
-    MAIN_PROXY,
+    REGISTRAR_PROXY,
     GREEDY_COUNTRY_ID,
     GREEDY_SERVICE_ID,
     GREEDY_OPERATOR_NAME,
@@ -45,18 +46,15 @@ class AccountRegistrar:
         """
         logger.info("Запуск компонента регистратора.")
         try:
-            while self.running:
-                try:
-                    logger.debug("Попытка регистрации нового аккаунта...")
-                    success = await self._register_single_account()
-                    if success:
-                        logger.info("Аккаунт успешно зарегистрирован, верифицирован и сохранён.")
-                    else:
-                        logger.warning("Не удалось зарегистрировать аккаунт, повтор через задержку.")
-                    await asyncio.sleep(self.delay)
-                except Exception as e:
-                    logger.error(f"Неожиданная ошибка в цикле регистратора: {e}")
-                    await asyncio.sleep(self.delay) # Пауза даже при ошибке
+            try:
+                logger.debug("Попытка регистрации нового аккаунта...")
+                success = await self._register_single_account()
+                if success:
+                    logger.info("Аккаунт успешно зарегистрирован, верифицирован и сохранён.")
+                else:
+                    logger.warning("Не удалось зарегистрировать аккаунт.")
+            except Exception as e:
+                logger.error(f"Неожиданная ошибка в цикле регистратора: {e}")
         finally:
             if self.account:
                 await self.account.api.close()
@@ -78,7 +76,7 @@ class AccountRegistrar:
             email=ordered_email,
             password=self._generate_random_password(),
             name=self.faker.user_name() if "random" in DEFAULT_ACCOUNT_NAME.lower() else DEFAULT_ACCOUNT_NAME,
-            proxy=MAIN_PROXY,
+            proxy=REGISTRAR_PROXY,
             pasta=DEFAULT_PASTA,
             anymessage_email_id=email_id
         )
@@ -152,10 +150,10 @@ class AccountRegistrar:
         Возвращает True при успехе.
         """
         logger.debug(f"Ожидание письма с подтверждением email (ID: {email_id}) через AnyMessage.")
-        await asyncio.sleep(30)
+        await asyncio.sleep(random.uniform(20, 25))
         async with self.anymessage_client as anymessage:
             try:
-                max_attempts = 10
+                max_attempts = 5
                 for attempt in range(max_attempts):
                     logger.debug(f"Попытка {attempt + 1}/{max_attempts} получить письмо...")
                     message_response = await anymessage.get_message(email_id=email_id)
@@ -207,7 +205,9 @@ class AccountRegistrar:
                         logger.error(f"AnyMessage вернул неожиданный статус или ошибку: {message_response}")
                         return False
 
-                logger.error(f"Не дождались письма с подтверждением за {max_attempts * 10} секунд.")
+                    await asyncio.sleep(random.uniform(5, 10))
+
+                logger.error(f"Не дождались письма с подтверждением.")
                 return False
 
             except Exception as e:

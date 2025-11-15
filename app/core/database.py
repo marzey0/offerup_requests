@@ -55,6 +55,8 @@ async def add_ad(ad: dict) -> bool:
         post_date = ad["postDate"]
 
         async with aiosqlite.connect(DATABASE_PATH) as db:
+            await db.execute("PRAGMA journal_mode=WAL")
+            await db.execute("PRAGMA busy_timeout=10000")
             await db.execute('''
                 INSERT OR IGNORE INTO ads (ad_id, title, seller_id, ratings_count, post_date, ad_details)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -92,6 +94,8 @@ async def get_next_unprocessed_ad(max_age_minutes: int = MAX_AD_AGE) -> Optional
         min_date_str = min_date.strftime('%Y-%m-%dT%H:%M:%S.%fZ')[:-3] + 'Z'
 
         async with aiosqlite.connect(DATABASE_PATH) as db:
+            await db.execute("PRAGMA journal_mode=WAL")
+            await db.execute("PRAGMA busy_timeout=10000")
             # Начинаем транзакцию
             await db.execute("BEGIN TRANSACTION")
 
@@ -108,7 +112,7 @@ async def get_next_unprocessed_ad(max_age_minutes: int = MAX_AD_AGE) -> Optional
                     WHERE processed = 1
                 )
                 ORDER BY post_date DESC LIMIT 1
-            ''', (min_date_str, MAX_RATINGS_COUNT))
+            ''', (MAX_RATINGS_COUNT, min_date_str))
 
             result = await cursor.fetchone()
 
@@ -141,6 +145,8 @@ async def update_ad_processed_status(ad_id: str, processed: int) -> bool:
     """
     try:
         async with aiosqlite.connect(DATABASE_PATH) as db:
+            await db.execute("PRAGMA journal_mode=WAL")
+            await db.execute("PRAGMA busy_timeout=10000")
             await db.execute('''
                 UPDATE ads 
                 SET processed = ? 
@@ -149,7 +155,7 @@ async def update_ad_processed_status(ad_id: str, processed: int) -> bool:
             await db.commit()
 
             if db.total_changes > 0:
-                logger.info(f"Обновлен статус объявления {ad_id} на {processed}")
+                logger.debug(f"Обновлен статус объявления {ad_id} на {processed}")
                 return True
             else:
                 logger.warning(f"Объявление {ad_id} не найдено для обновления")
@@ -172,6 +178,8 @@ async def ad_exists(ad_id: str) -> bool:
     """
     try:
         async with aiosqlite.connect(DATABASE_PATH) as db:
+            await db.execute("PRAGMA journal_mode=WAL")
+            await db.execute("PRAGMA busy_timeout=10000")
             cursor = await db.execute('''
                 SELECT 1 FROM ads WHERE ad_id = ?
             ''', (ad_id,))
@@ -190,7 +198,9 @@ async def increment_processed_counter(account_email: str, db_path: str = DATABAS
     Создаёт запись для аккаунта, если её не существует.
     """
     logger.debug(f"Увеличение счётчика processed для аккаунта {account_email}.")
-    async with aiosqlite.connect(db_path) as db:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA busy_timeout=10000")
         # Проверяем, существует ли уже запись для этого аккаунта
         cursor = await db.execute("SELECT processed FROM stat WHERE account_email = ?", (account_email,))
         row = await cursor.fetchone()
@@ -228,6 +238,8 @@ async def get_seller_processed_status(seller_id: str) -> bool:
     """
     try:
         async with aiosqlite.connect(DATABASE_PATH) as db:
+            await db.execute("PRAGMA journal_mode=WAL")
+            await db.execute("PRAGMA busy_timeout=10000")
             cursor = await db.execute('''
                 SELECT 1 FROM ads WHERE seller_id = ? AND processed = 1 LIMIT 1
             ''', (seller_id,))
@@ -246,7 +258,9 @@ async def get_processed_count(account_email: str, db_path: str = DATABASE_PATH) 
     Возвращает 0, если аккаунт не найден.
     """
     logger.debug(f"Получение счётчика processed для аккаунта {account_email}.")
-    async with aiosqlite.connect(db_path) as db:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA busy_timeout=10000")
         cursor = await db.execute("SELECT processed FROM stat WHERE account_email = ?", (account_email,))
         row = await cursor.fetchone()
         count = row[0] if row else 0

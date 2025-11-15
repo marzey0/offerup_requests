@@ -27,16 +27,14 @@ class OfferUpParser:
         Основной цикл парсера.
         """
         logger.info("Запуск компонента парсера.")
-        while self.running:
-            try:
-                logger.debug("Начало цикла парсинга...")
-                for city, coordinates in CITIES.items():
-                    await self._parse_new_listings(city, coordinates)
-                logger.debug(f"Цикл парсинга завершён. Пауза {self.delay} секунд.")
-                await asyncio.sleep(self.delay)
-            except Exception as e:
-                logger.error(f"Неожиданная ошибка в цикле парсера: {e}")
-                await asyncio.sleep(self.delay) # Пауза даже при ошибке
+        try:
+            logger.debug("Начало цикла парсинга...")
+            for city, coordinates in CITIES.items():
+                await self._parse_new_listings(city, coordinates)
+            logger.debug(f"Цикл парсинга завершён.")
+        except Exception as e:
+            logger.error(f"Неожиданная ошибка в цикле парсера: {e}")
+            await asyncio.sleep(self.delay) # Пауза даже при ошибке
 
     async def _get_categories(self) -> List[Dict[str, str]]:
         try:

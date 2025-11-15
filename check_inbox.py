@@ -31,10 +31,13 @@ async def check_inbox():
         except Exception as e:
             print(f"Ошибка {e.__class__.__name__} при запросе входящих на аккаунте {account.email}: {e}")
             continue
-
-        inbox_messages = inbox_response["data"]["unreadNotificationCount"]["inbox"]
-        print(f"[{dir_name}] {account.email} - Отписано: {account.processed}, Входящие: {inbox_messages}")
-        await account.api.close()
+        try:
+            inbox_messages = inbox_response.get("data", {}).get("unreadNotificationCount", {}).get("inbox", inbox_response)
+            print(f"[{dir_name}] {account.email} - Отписано: {account.processed}, Входящие: {inbox_messages}")
+        except AttributeError:
+            pass
+        finally:
+            await account.api.close()
 
 
 if __name__ == "__main__":

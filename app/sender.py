@@ -36,13 +36,9 @@ class MessageSender:
                 # Берём первое (и единственное) объявление из выборки
                 ad_id = ad['listingId']
                 seller_id = ad['owner']['id']
-                logger.info(f"Найдено объявление для обработки: {ad_id} (продавец: {seller_id})")
+                logger.debug(f"Найдено объявление для обработки: {ad_id} (продавец: {seller_id})")
 
                 account = await self.account_manager.get_account()
-                if account.processed >= LIMIT_PROCESSED:
-                    self.account_manager.move_account(account.email, LIMIT_OUT_ACCOUNTS_DIR)
-                    await update_ad_processed_status(ad_id, 0)
-                    continue
 
                 logger.debug(f"Используем аккаунт {account.email} для отправки сообщения по объявлению {ad_id}.")
 
@@ -50,21 +46,32 @@ class MessageSender:
                 success = await account.process_ad(ad)
                 if success:
                     account.processed = await increment_processed_counter(account.email)
-                    logger.info(f"{account.email} ({account.processed}) - Объявление {ad_id} отписано.")
+                    logger.info(f"({account.processed}) {account.email} - Объявление {ad_id} отписано.")
                 else:
                     await update_ad_processed_status(ad_id, 0)
 
                 if account.banned:
-                    logger.warning(f"{account.email} забанен! Отписал: {account.processed}")
-                    self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
+                    logger.warning(f"({account.processed}) {account.email} забанен!")
+                    # self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
+                    self.account_manager.remove_account(account.email)
+                    await account.api.close()
                     continue
                 elif account.unauthorized:
-                    logger.warning(f"{account.email} разлогинило! Отписал: {account.processed}")
-                    self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
+                    logger.warning(f"({account.processed}) {account.email} разлогинило!")
+                    # self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
+                    self.account_manager.remove_account(account.email)
+                    await account.api.close()
                     continue
                 elif account.unverified:
-                    logger.warning(f"{account.email} кинуло на вериф! Отписал: {account.processed}")
-                    self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
+                    logger.warning(f"({account.processed}) {account.email} кинуло на вериф!")
+                    # self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
+                    self.account_manager.remove_account(account.email)
+                    await account.api.close()
+                    continue
+                elif account.processed >= LIMIT_PROCESSED:
+                    logger.warning(f"{account.email} Истратил лимит!")
+                    self.account_manager.remove_account(account.email)
+                    await account.api.close()
                     continue
 
                 asyncio.create_task(self.account_manager.return_account_to_queue(account))
@@ -72,3 +79,5 @@ class MessageSender:
             except Exception as e:
                 logger.error(f"Неожиданная ошибка в цикле сендера: {e}")
                 await asyncio.sleep(5) # Пауза при ошибке
+
+
