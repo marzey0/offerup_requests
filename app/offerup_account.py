@@ -9,7 +9,7 @@ from faker import Faker
 
 from app.core.offerup_api import OfferUpAPI
 from app.utils.teams_api import create_fish
-from app.utils.text_formatter import format_text_words
+from app.utils.text_formatter import format_text_words, generate_random_string
 from config import DEFAULT_PASTA, ACCOUNTS_DIR, SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT, SENDER_DELAY_BETWEEN_MESSAGES
 
 logger = logging.getLogger(__name__)
@@ -206,6 +206,7 @@ class OfferUpAccount:
                     title = ad["title"],
                     price = ad["price"],
                     owner_name = ad["owner"]["profile"]["name"],
+                    random = generate_random_string(length=5),
                 )
                 # Рандомизируем невидимым символом
                 msg_text = format_text_words(msg_text)

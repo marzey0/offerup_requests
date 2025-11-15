@@ -1,5 +1,24 @@
-import random
 import re
+import random
+import string
+
+
+def generate_random_string(length=5):
+    """
+    Генерирует строку случайных английских букв и цифр.
+
+    Args:
+        length (int): Длина генерируемой строки
+
+    Returns:
+        str: Строка случайных английских букв и цифр
+    """
+    characters = string.ascii_letters + string.digits  # a-z, A-Z, 0-9
+    return ''.join(random.choice(characters) for _ in range(length))
+
+
+# Пример использования:
+# random_string = generate_random_string(12)  # Генерирует строку длиной 12 символов
 
 
 def format_text_words(text, min_chunk=1, max_chunk=4, separator='\u200b'):
