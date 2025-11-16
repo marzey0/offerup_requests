@@ -9,7 +9,7 @@ from app.utils.logg import setup_logging
 from config import DATABASE_PATH
 
 # --- Настройка логирования ---
-logger_instance = setup_logging(level=logging.INFO)
+logger_instance = setup_logging(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 async def main():

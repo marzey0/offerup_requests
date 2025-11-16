@@ -3,6 +3,7 @@ import re
 import string
 
 
+# Рандомизируем невидимым символом
 def format_text_words(text, min_chunk=1, max_chunk=4, separator='\u200b'):
     """Форматирует текст: разделяет по словам и вставляет разделитель в случайных местах каждого слова"""
     if not text:

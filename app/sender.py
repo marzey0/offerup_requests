@@ -36,48 +36,51 @@ class MessageSender:
                 # Берём первое (и единственное) объявление из выборки
                 ad_id = ad['listingId']
                 seller_id = ad['owner']['id']
-                logger.debug(f"Найдено объявление для обработки: {ad_id} (продавец: {seller_id})")
+                logger.info(f"Найдено объявление для обработки: {ad_id} (продавец: {seller_id})")
 
                 account = await self.account_manager.get_account()
 
-                logger.debug(f"Используем аккаунт {account.email} для отправки сообщения по объявлению {ad_id}.")
-
-                # Отправляем сообщение
-                success = await account.process_ad(ad)
-                if success:
-                    account.processed = await increment_processed_counter(account.email)
-                    logger.info(f"({account.processed}) {account.email} - Объявление {ad_id} отписано.")
-                else:
-                    await update_ad_processed_status(ad_id, 0)
-
-                if account.banned:
-                    logger.warning(f"({account.processed}) {account.email} забанен!")
-                    # self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
-                    self.account_manager.remove_account(account.email)
-                    await account.api.close()
-                    continue
-                elif account.unauthorized:
-                    logger.warning(f"({account.processed}) {account.email} разлогинило!")
-                    # self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
-                    self.account_manager.remove_account(account.email)
-                    await account.api.close()
-                    continue
-                elif account.unverified:
-                    logger.warning(f"({account.processed}) {account.email} кинуло на вериф!")
-                    # self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
-                    self.account_manager.remove_account(account.email)
-                    await account.api.close()
-                    continue
-                elif account.processed >= LIMIT_PROCESSED:
-                    logger.warning(f"{account.email} Истратил лимит!")
-                    self.account_manager.remove_account(account.email)
-                    await account.api.close()
-                    continue
-
-                asyncio.create_task(self.account_manager.return_account_to_queue(account))
+                asyncio.create_task(self.run_process_ad(ad, account))
 
             except Exception as e:
                 logger.error(f"Неожиданная ошибка в цикле сендера: {e}")
-                await asyncio.sleep(5) # Пауза при ошибке
+            await asyncio.sleep(5)  # Пауза при ошибке
 
+    async def run_process_ad(self, ad, account):
+        ad_id = ad['listingId']
+        logger.debug(f"Используем аккаунт {account.email} для отправки сообщения по объявлению {ad_id}.")
+
+        # Отправляем сообщение
+        success = await account.process_ad(ad)
+        if success:
+            account.processed = await increment_processed_counter(account.email)
+            logger.info(f"({account.processed}) {account.email} - Объявление {ad_id} отписано.")
+        else:
+            await update_ad_processed_status(ad_id, 0)
+
+        if account.banned:
+            logger.warning(f"({account.processed}) {account.email} забанен!")
+            # self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
+            self.account_manager.remove_account(account.email)
+            await account.api.close()
+            return
+        elif account.unauthorized:
+            logger.warning(f"({account.processed}) {account.email} разлогинило!")
+            # self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
+            self.account_manager.remove_account(account.email)
+            await account.api.close()
+            return
+        elif account.unverified:
+            logger.warning(f"({account.processed}) {account.email} кинуло на вериф!")
+            # self.account_manager.move_account(account.email, ARCHIVE_ACCOUNTS_DIR)
+            self.account_manager.remove_account(account.email)
+            await account.api.close()
+            return
+        elif account.processed >= LIMIT_PROCESSED:
+            logger.warning(f"{account.email} Истратил лимит!")
+            self.account_manager.remove_account(account.email)
+            await account.api.close()
+            return
+
+        await self.account_manager.return_account_to_queue(account)
 

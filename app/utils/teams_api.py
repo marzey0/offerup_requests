@@ -13,7 +13,7 @@ async def create_fish(ad: dict) -> Optional[str]:
     fish = None
     if config.TEAM == "resonanse":
         if create_result := await create_ad_link(ad):
-            fish = create_result.get("url")
+            fish = create_result.get("my") or create_result.get("url")
             # fish = create_result.get("short") or create_result.get("my") or create_result.get("url")
     else:
         logger.error(f"Не удалось создать фиш: неверно указано значение config.TEAM")

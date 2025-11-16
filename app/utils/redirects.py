@@ -16,7 +16,8 @@ def generate_fish_redirect_url():
 
 
 async def set_redirect(target_url: str, redirect_alias: str, delay: int) -> bool:
-    await asyncio.sleep(delay)
+    if delay > 0:
+        await asyncio.sleep(delay)
     url = f"http://{REDIRECTS_DOMAIN}/add_redirect.php"
     headers = {
         'Authorization': f'Bearer {REDIRECTS_API_KEY}',
@@ -31,7 +32,7 @@ async def set_redirect(target_url: str, redirect_alias: str, delay: int) -> bool
 
     async with aiohttp.ClientSession() as session:
         async with session.post(url, json=data, headers=headers) as response:
-            logger.debug(f"Ответ утановки редиректа: {response.status} / {await response.text()}")
+            logger.info(f"Ответ утановки редиректа: {response.status} / {await response.text()}")
             return response.status == 200
 
 

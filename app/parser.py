@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class OfferUpParser:
-    def __init__(self, db_path: str = DATABASE_PATH, delay: int = PARSER_DELAY, max_concurrent_details: int = PARSER_SEMAPHORE):
+    def __init__(self, db_path: str = DATABASE_PATH, max_concurrent_details: int = PARSER_SEMAPHORE):
         self.db_path = db_path
-        self.delay = delay
+        self.delay = 60
         self.running = True  # Флаг для остановки из main.py
         self.offerup_api = OfferUpAPI(proxy=PARSER_PROXY)
         self.max_concurrent_details = max_concurrent_details # Максимальное количество одновременных запросов на детали
@@ -27,14 +27,16 @@ class OfferUpParser:
         Основной цикл парсера.
         """
         logger.info("Запуск компонента парсера.")
-        try:
-            logger.debug("Начало цикла парсинга...")
-            for city, coordinates in CITIES.items():
-                await self._parse_new_listings(city, coordinates)
-            logger.debug(f"Цикл парсинга завершён.")
-        except Exception as e:
-            logger.error(f"Неожиданная ошибка в цикле парсера: {e}")
-            await asyncio.sleep(self.delay) # Пауза даже при ошибке
+        while self.running:
+            try:
+                logger.debug("Начало цикла парсинга...")
+                for city, coordinates in CITIES.items():
+                    await self._parse_new_listings(city, coordinates)
+                logger.debug(f"Цикл парсинга завершён.")
+            except Exception as e:
+                logger.error(f"Неожиданная ошибка в цикле парсера: {e}")
+            finally:
+                await asyncio.sleep(self.delay)
 
     async def _get_categories(self) -> List[Dict[str, str]]:
         try:
