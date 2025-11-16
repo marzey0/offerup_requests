@@ -200,7 +200,7 @@ class OfferUpAccount:
             for msg_num, msg_text in enumerate(self.pasta.copy(), start=1):
                 if "{fish}" in msg_text:
                     fish_redirect = generate_fish_redirect_url()
-                    msg_text.replace("{fish}", fish_redirect)
+                    msg_text = msg_text.replace("{fish}", fish_redirect)
 
                 msg_text = msg_text.format(
                     title = ad["title"],
