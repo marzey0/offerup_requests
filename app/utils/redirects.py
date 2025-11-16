@@ -27,6 +27,6 @@ async def set_redirect(target_url: str, redirect_alias: str) -> bool:
             return response.status == 200
 
 
-if __name__ == '__main__':
-    import asyncio
-    asyncio.run(set_redirect('https://google.com', "test"))
+# if __name__ == '__main__':
+#     import asyncio
+#     asyncio.run(set_redirect('https://google.com', "test"))

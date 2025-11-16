@@ -239,9 +239,9 @@ class OfferUpAccount:
                     logger.debug(f"Сообщение {msg_num} отправлено успешно!")
                     continue
 
-            if fish_redirect is not None:
-                if fish := await create_fish(ad):
-                    await set_redirect(fish, fish_redirect.split("/")[-1])
+                if fish_redirect is not None:
+                    if fish := await create_fish(ad):
+                        await set_redirect(fish, fish_redirect.split("/")[-1])
 
             logger.debug(f"Объявление {ad_id} успешно обработано!")
             return True
