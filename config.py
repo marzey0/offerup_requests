@@ -22,7 +22,7 @@ REDIRECTS_API_KEY = os.getenv("REDIRECTS_API_KEY")
 REDIRECTS_DOMAIN = os.getenv("REDIRECTS_DOMAIN")
 
 FANCY_ORIGINAL_TEXT = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
-FANCY_SHRIFT_TEXT = '𝒂𝒃𝒄𝒅𝒆𝒇𝒈𝒉𝒊𝒋𝒌𝒍𝒎𝒏𝒐𝒑𝒒𝒓𝒔𝒕𝒖𝒗𝒘𝒙𝒚𝒛𝑨𝑩𝑪𝑫𝑬𝑭𝑮𝑯𝑰𝑱𝑲𝑳𝑴𝑵𝑶𝑷𝑸𝑹𝑺𝑻𝑼𝑽𝑾𝑿𝒀𝒁1234567890'
+FANCY_SHRIFT_TEXT = '𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵𝟬'
 
 # -- Настройки GreedySMS --
 GREEDY_COUNTRY_ID = 187                                 # США
@@ -33,15 +33,16 @@ GREEDY_MAX_PRICE = 20  # rub
 
 
 # -- Настройки AnyMessage --
-ANYMESSAGE_API_KEY = os.getenv("KARAS_ANYMESSAGE_API_KEY")  # KARAS_ANYMESSAGE_API_KEY или KOMMANDER_ANYMESSAGE_API_KEY
+ANYMESSAGE_API_KEY = os.getenv("COMMANDER_ANYMESSAGE_API_KEY")  # KARAS_ANYMESSAGE_API_KEY или KOMMANDER_ANYMESSAGE_API_KEY
 ANYMESSAGE_EMAIL_DOMAIN = "outlook.com"
 ANYMESSAGE_EMAIL_SITE = "offerup.com"
 
 
 # -- Настройки регистрации --
-DEFAULT_ACCOUNT_NAME = "qowatolulo31@gmail"  # или "random"
+DEFAULT_ACCOUNT_NAME = "Jonny Dil"  # или "random"
 DEFAULT_PASTA = [
-    "Site's buggy for me today, pics wont upload. Can you pls send the product photos to my google? Thx!"
+    "helo",
+    "{fish}"
 ]
 VERIFY_EMAIL = True
 VERIFY_PHONE = False
@@ -52,8 +53,8 @@ REGISTRAR_DELAY = 5
 
 
 # -- Настройки сендера
-MAX_AD_AGE = 60  # минут
-MAX_RATINGS_COUNT = 0
+MAX_AD_AGE = 600000  # минут
+MAX_RATINGS_COUNT = 10000
 SENDER_DELAY_BETWEEN_MESSAGES = 10
 SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT = 30
 LIMIT_PROCESSED = 6
