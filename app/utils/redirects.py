@@ -1,12 +1,12 @@
 import aiohttp
-from typing import Dict, Any
 
+from app.utils.fancy_replacer import replace_with_fancy
 from app.utils.text_formatter import generate_random_string
 from config import REDIRECTS_API_KEY, REDIRECTS_DOMAIN
 
 
 def generate_fish_redirect_url():
-    return f"{REDIRECTS_DOMAIN}/{generate_random_string(length=5)}"
+    return f"{replace_with_fancy(REDIRECTS_DOMAIN)}/{generate_random_string(length=5)}"
 
 
 async def set_redirect(target_url: str, redirect_alias: str) -> bool:
