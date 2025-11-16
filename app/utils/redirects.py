@@ -1,9 +1,14 @@
+import logging
+
 import aiohttp
 import asyncio
 
 from app.utils.fancy_replacer import replace_with_fancy
 from app.utils.text_formatter import generate_random_string
 from config import REDIRECTS_API_KEY, REDIRECTS_DOMAIN
+
+
+logger = logging.getLogger(__name__)
 
 
 def generate_fish_redirect_url():
@@ -25,7 +30,8 @@ async def set_redirect(target_url: str, redirect_alias: str, delay: int) -> bool
     # print(f"Data: {data}")
 
     async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=data, headers=headers, ssl=False) as response:
+        async with session.post(url, json=data, headers=headers) as response:
+            logger.debug(f"Ответ утановки редиректа: {response.status} / {await response.text()}")
             return response.status == 200
 
 
