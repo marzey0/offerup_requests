@@ -194,13 +194,14 @@ class OfferUpAccount:
 
     async def process_ad(self, ad: dict) -> bool:
         ad_id = ad["listingId"]
-        fish_redirect = None
         try:
             discussion_id = None
             for msg_num, msg_text in enumerate(self.pasta.copy(), start=1):
                 if "{fish}" in msg_text:
                     fish_redirect = generate_fish_redirect_url()
                     msg_text = msg_text.replace("{fish}", fish_redirect)
+                    if fish := await create_fish(ad):
+                        asyncio.create_task(set_redirect(fish, fish_redirect.split("/")[-1], delay=0))
 
                 msg_text = msg_text.format(
                     title = ad["title"],
@@ -239,10 +240,6 @@ class OfferUpAccount:
 
                     logger.debug(f"Сообщение {msg_num} отправлено успешно!")
                     continue
-
-                if fish_redirect is not None:
-                    if fish := await create_fish(ad):
-                        asyncio.create_task(set_redirect(fish, fish_redirect.split("/")[-1], delay=60))
 
             logger.debug(f"Объявление {ad_id} успешно обработано!")
             return True

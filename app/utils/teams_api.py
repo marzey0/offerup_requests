@@ -20,6 +20,7 @@ async def create_fish(ad: dict) -> Optional[str]:
         return None
 
     if fish is None:
+        logger.warning(f"Фиш не был создан!")
         return None
 
     logger.debug(f"Создан фиш: {fish}")
@@ -75,4 +76,4 @@ async def create_ad_link(ad: dict) -> Optional[Dict[str, Any]]:
 # if __name__ == "__main__":
 #     from app.core.offerup_docs.listing_details import listing_details
 #     import asyncio
-#     asyncio.run(create_ad_link(ad=listing_details))
+#     asyncio.run(create_fish(ad=listing_details["data"]["listing"]))
