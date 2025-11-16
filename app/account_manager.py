@@ -10,7 +10,7 @@ from faker.generator import random
 
 from app.core.database import get_processed_count
 from app.offerup_account import OfferUpAccount
-from config import ACCOUNTS_DIR
+from config import ACCOUNTS_DIR, ARCHIVE_ACCOUNTS_DIR, LIMIT_OUT_ACCOUNTS_DIR
 
 logger = logging.getLogger(__name__)
 

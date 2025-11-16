@@ -1,24 +1,6 @@
-import re
 import random
+import re
 import string
-
-
-def generate_random_string(length=5):
-    """
-    Генерирует строку случайных английских букв и цифр.
-
-    Args:
-        length (int): Длина генерируемой строки
-
-    Returns:
-        str: Строка случайных английских букв и цифр
-    """
-    characters = string.ascii_letters + string.digits  # a-z, A-Z, 0-9
-    return ''.join(random.choice(characters) for _ in range(length))
-
-
-# Пример использования:
-# random_string = generate_random_string(12)  # Генерирует строку длиной 12 символов
 
 
 def format_text_words(text, min_chunk=1, max_chunk=4, separator='\u200b'):
@@ -75,6 +57,22 @@ def format_text_words(text, min_chunk=1, max_chunk=4, separator='\u200b'):
     return ''.join(formatted_parts)
 
 
+def generate_random_string(length=5):
+    """
+    Генерирует строку случайных английских букв и цифр.
+
+    Args:
+        length (int): Длина генерируемой строки
+
+    Returns:
+        str: Строка случайных английских букв и цифр
+    """
+    characters = string.ascii_letters + string.digits  # a-z, A-Z, 0-9
+    return ''.join(random.choice(characters) for _ in range(length))
+
+
+# Пример использования:
+# random_string = generate_random_string(12)  # Генерирует строку длиной 12 символов
 
 # pasta = "Congratulations on your sale! Your item, {title}, has been purchased for ${price}!\n\nThe funds are currently being held by our secure transaction service. To finalize the sale and see it in your app, please confirm the transaction using the link in the following message.\n\nPlease note: Depending on your device, the link may not be clickable. If this happens, please copy the link, open your browser, and paste it into the address bar.\n\nIf you have any questions, you can always ask them in the chat on the order page."
 #

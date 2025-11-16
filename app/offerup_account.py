@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 from faker import Faker
 
 from app.core.offerup_api import OfferUpAPI
+from app.utils.redirects import generate_fish_redirect_url, set_redirect
 from app.utils.teams_api import create_fish
 from app.utils.text_formatter import format_text_words, generate_random_string
 from config import DEFAULT_PASTA, ACCOUNTS_DIR, SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT, SENDER_DELAY_BETWEEN_MESSAGES
@@ -193,20 +194,18 @@ class OfferUpAccount:
 
     async def process_ad(self, ad: dict) -> bool:
         ad_id = ad["listingId"]
+        fish_redirect = None
         try:
             discussion_id = None
             for msg_num, msg_text in enumerate(self.pasta.copy(), start=1):
                 if "{fish}" in msg_text:
-                    if fish := await create_fish(ad):
-                        msg_text = msg_text.replace("{fish}", fish)
-                    else:
-                        return False
+                    fish_redirect = generate_fish_redirect_url()
+                    msg_text.replace("{fish}", fish_redirect)
 
                 msg_text = msg_text.format(
                     title = ad["title"],
                     price = ad["price"],
                     owner_name = ad["owner"]["profile"]["name"],
-                    random = generate_random_string(length=5),
                 )
                 # Рандомизируем невидимым символом
                 msg_text = format_text_words(msg_text)
@@ -239,6 +238,10 @@ class OfferUpAccount:
 
                     logger.debug(f"Сообщение {msg_num} отправлено успешно!")
                     continue
+
+            if fish_redirect is not None:
+                if fish := await create_fish(ad):
+                    await set_redirect(fish, fish_redirect.split("/")[-1])
 
             logger.debug(f"Объявление {ad_id} успешно обработано!")
             return True
