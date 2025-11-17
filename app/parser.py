@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List, Tuple
 
 from app.core.offerup_api import OfferUpAPI
 from app.core.database import ad_exists, add_ad
-from config import PARSER_DELAY, PARSER_CATEGORIES_EXCLUDED, PARSER_SEMAPHORE, DATABASE_PATH, PARSER_PROXY, CITIES
+from config import PARSER_CATEGORIES_EXCLUDED, PARSER_SEMAPHORE, DATABASE_PATH, PARSER_PROXY, CITIES
 
 logger = logging.getLogger(__name__)
 

@@ -39,10 +39,10 @@ ANYMESSAGE_EMAIL_SITE = "offerup.com"
 
 
 # -- Настройки регистрации --
-DEFAULT_ACCOUNT_NAME = "ㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤ"  # или "random"
+DEFAULT_ACCOUNT_NAME = "ㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤ"  # или "random"
 DEFAULT_PASTA = [
-    "𝘾𝙤𝙣𝙜𝙧𝙖𝙩𝙪𝙡𝙖𝙩𝙞𝙤𝙣𝙨 𝙤𝙣 𝙮𝙤𝙪𝙧 𝙨𝙖𝙡𝙚❗️ Your item has been purchased for ${price}! The 𝗳unds are currently being hold by our secure transaction service. For the sale to appear in your app, please conf𝗶rm the transaction using the ⅼ𝗶𝗻𝗸 in the following message.",
-    # "Finalize your sale!",
+    # "𝘾𝙤𝙣𝙜𝙧𝙖𝙩𝙪𝙡𝙖𝙩𝙞𝙤𝙣𝙨 𝙤𝙣 𝙮𝙤𝙪𝙧 𝙨𝙖𝙡𝙚❗️ Your item has been purchased for ${price}! The 𝗳unds are currently being hold by our secure transaction service. For the sale to appear in your app, please conf𝗶rm the transaction using the ⅼ𝗶𝗻𝗸 in the following message.",
+    "Great news! Your item 𝙨old for ${price}! The payme𝗻t is secured in our system. Just one step left: click the ⅼ𝗶𝗻𝗸 to con𝗳irm and the sale will show up in your app.",
     "{fish}"
 ]
 VERIFY_EMAIL = True
@@ -54,9 +54,9 @@ REGISTRAR_DELAY = 5
 
 
 # -- Настройки сендера
-MAX_AD_AGE = 120  # минут
+MAX_AD_AGE = 60*48  # минут
 MAX_RATINGS_COUNT = 0
-SENDER_DELAY_BETWEEN_MESSAGES = 10
+SENDER_DELAY_BETWEEN_MESSAGES = 0
 SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT = 30
 LIMIT_PROCESSED = 6
 
