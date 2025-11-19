@@ -44,7 +44,7 @@ class MessageSender:
 
             except Exception as e:
                 logger.error(f"Неожиданная ошибка в цикле сендера: {e}")
-            await asyncio.sleep(5)  # Пауза при ошибке
+                await asyncio.sleep(5)  # Пауза при ошибке
 
     async def run_process_ad(self, ad, account):
         ad_id = ad['listingId']

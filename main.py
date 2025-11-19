@@ -13,7 +13,7 @@ from app.utils.logg import setup_logging
 from config import DATABASE_PATH, REGISTRAR_DELAY
 
 # --- Настройка логирования ---
-logger_instance = setup_logging()
+logger_instance = setup_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class MainApp:

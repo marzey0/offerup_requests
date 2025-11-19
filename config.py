@@ -22,7 +22,7 @@ REDIRECTS_API_KEY = os.getenv("REDIRECTS_API_KEY")
 REDIRECTS_DOMAIN = os.getenv("REDIRECTS_DOMAIN")
 
 FANCY_ORIGINAL_TEXT = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
-FANCY_SHRIFT_TEXT = '𝒂𝒃𝒄𝒅𝒆𝒇𝒈𝒉𝒊𝒋𝒌𝒍𝒎𝒏𝒐𝒑𝒒𝒓𝒔𝒕𝒖𝒗𝒘𝒙𝒚𝒛𝑨𝑩𝑪𝑫𝑬𝑭𝑮𝑯𝑰𝑱𝑲𝑳𝑴𝑵𝑶𝑷𝑸𝑹𝑺𝑻𝑼𝑽𝑾𝑿𝒀𝒁1234567890'
+FANCY_SHRIFT_TEXT = '𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡𝟘'
 
 # -- Настройки GreedySMS --
 GREEDY_COUNTRY_ID = 187                                 # США
@@ -34,16 +34,17 @@ GREEDY_MAX_PRICE = 20  # rub
 
 # -- Настройки AnyMessage --
 ANYMESSAGE_API_KEY = os.getenv("COMMANDER_ANYMESSAGE_API_KEY")  # KARAS_ANYMESSAGE_API_KEY или KOMMANDER_ANYMESSAGE_API_KEY
-ANYMESSAGE_EMAIL_DOMAIN = "outlook.com"
+ANYMESSAGE_EMAIL_DOMAIN = "hotmail.com"
 ANYMESSAGE_EMAIL_SITE = "offerup.com"
 
 
 # -- Настройки регистрации --
-DEFAULT_ACCOUNT_NAME = "ㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤ"  # или "random"
+DEFAULT_ACCOUNT_NAME = "random"  # или "random"
 DEFAULT_PASTA = [
-    # "𝘾𝙤𝙣𝙜𝙧𝙖𝙩𝙪𝙡𝙖𝙩𝙞𝙤𝙣𝙨 𝙤𝙣 𝙮𝙤𝙪𝙧 𝙨𝙖𝙡𝙚❗️ Your item has been purchased for ${price}! The 𝗳unds are currently being hold by our secure transaction service. For the sale to appear in your app, please conf𝗶rm the transaction using the ⅼ𝗶𝗻𝗸 in the following message.",
-    "Great news! Your item 𝙨old for ${price}! The payme𝗻t is secured in our system. Just one step left: click the ⅼ𝗶𝗻𝗸 to con𝗳irm and the sale will show up in your app.",
-    "{fish}"
+    # "A buyer has been found for your item! The transaction amount is ${price}. The 𝖿𝘶𝑛𝑑𝑠 are in reserve. To complete the payment and update the status in your app, confirm the deal via the ⅼ𝗶𝗻𝗸 in the next message",
+    "offerup-deep\u200b.com\\{random}",
+    # "OfferUp-deep.com\\{random}",
+    # "{fish}"
 ]
 VERIFY_EMAIL = True
 VERIFY_PHONE = False
