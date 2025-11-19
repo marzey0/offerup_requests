@@ -46,6 +46,7 @@ DEFAULT_PASTA = [
     # "OfferUp-deep.com\\{random}",
     # "{fish}"
 ]
+AVATAR = "data/avatar.png"
 VERIFY_EMAIL = True
 VERIFY_PHONE = False
 REGISTRAR_PROXY = os.getenv("REGISTRAR_PROXY")

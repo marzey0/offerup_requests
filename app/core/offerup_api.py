@@ -168,6 +168,82 @@ class OfferUpAPI:
 
     # --- API Методы ---
 
+    async def generate_photo_uuids(self, number_of_photos: int = 1) -> dict:
+        operation_name = "GeneratePhotoUuids"
+        query = """
+            mutation GeneratePhotoUuids($numberOfPhotos: Int!) {
+                generateS3PhotoUuids(numberOfPhotos: $numberOfPhotos) {
+                    location
+                    uuid
+                    __typename
+                }
+            }
+        """
+        variables = {"numberOfPhotos": number_of_photos}
+        return await self._make_request(
+            operation_name=operation_name,
+            query=query,
+            variables=variables,
+            requires_auth=True,
+            screen="/profile-image-stack/profile-image-select"
+        )
+
+    @staticmethod
+    async def upload_photo_to_s3(location: str, img_bytes: bytes, content_type: str = "image/jpeg") -> int:
+        """
+        Загружает изображение на S3 по presigned URL.
+        :param location: S3 presigned URL from generate_photo_uuids
+        :param img_bytes: Raw image content (bytes)
+        :param content_type: MIME-type, default 'image/jpeg'
+        :return: HTTP status (200 for OK)
+        """
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Content-Type": content_type
+            }
+            async with session.put(location, data=img_bytes, headers=headers) as resp:
+                resp.raise_for_status()
+                return resp.status
+
+    async def update_user_profile_image(self, user_id: str, photo_uuid: str) -> dict:
+        operation_name = "UpdateUserProfileImage"
+        query = """
+            mutation UpdateUserProfileImage($userId: String!, $photoUuid: String!) {
+                setProfilePhoto(userId: $userId, photoUuid: $photoUuid)
+            }
+        """
+        variables = {
+            "userId": user_id,
+            "photoUuid": photo_uuid
+        }
+        return await self._make_request(
+            operation_name=operation_name,
+            query=query,
+            variables=variables,
+            requires_auth=True,
+            screen="/profile-image-stack/profile-image-select"
+        )
+
+    async def set_profile_photo(self, img_bytes: bytes, user_id: str) -> dict:
+        """
+        Полная логика: получить uuid, загрузить фото и применить фото к профилю.
+        :param img_bytes: Raw image content (bytes)
+        :param user_id: User ID (str)
+        :return: Mutation response dict
+        """
+        # 1. Получение адреса загрузки и uuid
+        photo_info = await self.generate_photo_uuids(1)
+        photo_data = photo_info["data"]["generateS3PhotoUuids"][0]
+        location = photo_data["location"]
+        photo_uuid = photo_data["uuid"]
+
+        # 2. Загрузка в S3
+        await self.upload_photo_to_s3(location, img_bytes)
+
+        # 3. Применение фото профиля
+        result = await self.update_user_profile_image(user_id, photo_uuid)
+        return result
+
     async def get_user_context(self, viewport_size: Dict[str, int], search_location: Dict[str, float]) -> Dict[str, Any]:
         """
         Получает контекст пользователя.

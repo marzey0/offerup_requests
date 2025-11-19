@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import json
+import os.path
 import random
 import traceback
 import uuid
@@ -20,7 +21,7 @@ from config import (
     GREEDY_OPERATOR_NAME,
     GREEDY_MAX_PRICE,
     ANYMESSAGE_EMAIL_SITE,
-    ANYMESSAGE_EMAIL_DOMAIN, VERIFY_EMAIL, VERIFY_PHONE, DEFAULT_ACCOUNT_NAME
+    ANYMESSAGE_EMAIL_DOMAIN, VERIFY_EMAIL, VERIFY_PHONE, DEFAULT_ACCOUNT_NAME, AVATAR
 )
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,11 @@ class AccountRegistrar:
             phone_verified = await self._verify_phone_with_greedy_sms()
             if not phone_verified:
                 logger.warning(f"Не удалось верифицировать телефон для {ordered_email}.")
+
+        if AVATAR and os.path.exists(AVATAR):
+            with open(AVATAR, "rb") as img:
+                img_bytes = img.read()
+            await self.account.api.set_profile_photo(img_bytes, self.account.user_id)
 
         self.account.save_to_file()
         logger.info(f"Зарегистрирован новый аккаунт: {ordered_email}")
