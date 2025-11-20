@@ -34,19 +34,19 @@ GREEDY_MAX_PRICE = 20  # rub
 
 # -- Настройки AnyMessage --
 ANYMESSAGE_API_KEY = os.getenv("COMMANDER_ANYMESSAGE_API_KEY")  # KARAS_ANYMESSAGE_API_KEY или KOMMANDER_ANYMESSAGE_API_KEY
-ANYMESSAGE_EMAIL_DOMAIN = "hotmail.com"
+ANYMESSAGE_EMAIL_DOMAIN = "outlook.com"
 ANYMESSAGE_EMAIL_SITE = "offerup.com"
 
 
 # -- Настройки регистрации --
+AVATAR = ""
+# AVATAR = "data/avatar.jpg"
 DEFAULT_ACCOUNT_NAME = "random"  # или "random"
 DEFAULT_PASTA = [
-    # "A buyer has been found for your item! The transaction amount is ${price}. The 𝖿𝘶𝑛𝑑𝑠 are in reserve. To complete the payment and update the status in your app, confirm the deal via the ⅼ𝗶𝗻𝗸 in the next message",
-    "offerup-deep\u200b.com\\{random}",
-    # "OfferUp-deep.com\\{random}",
-    # "{fish}"
+    "We would like to inform you that the item has been claimed by a buyer.",
+    "To change the item's status, please follow the ⅼ𝗶𝗻𝗸. Thank you for staying with us!",
+    "{fish}"
 ]
-AVATAR = "data/avatar.png"
 VERIFY_EMAIL = True
 VERIFY_PHONE = False
 REGISTRAR_PROXY = os.getenv("REGISTRAR_PROXY")
@@ -58,7 +58,7 @@ REGISTRAR_DELAY = 5
 # -- Настройки сендера
 MAX_AD_AGE = 60*48  # минут
 MAX_RATINGS_COUNT = 0
-SENDER_DELAY_BETWEEN_MESSAGES = 0
+SENDER_DELAY_BETWEEN_MESSAGES = 10
 SENDER_COOLDOWN_SECONDS_FOR_ACCOUNT = 30
 LIMIT_PROCESSED = 6
 
